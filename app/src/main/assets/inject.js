@@ -318,7 +318,8 @@
             if (typeof v === 'string') { var f = parseFloat(v); return isNaN(f) || f === 0; }
             return true;
         }
-        // 处理 position.gcj.encryptwgs 请求体：把无效坐标或 BD-09 坐标统一换成 GCJ-02
+        // 递归替换请求体中的坐标字段：把无效坐标或 BD-09 坐标统一换成 GCJ-02
+        // 用于 position.gcj.encryptwgs、attend.signin.geocheck、attend.signin.create 等接口
         function _hr_fixEncryptWgsBody(obj, bd, gcj) {
             if (!obj || typeof obj !== 'object') return obj;
             if (Array.isArray(obj)) {
@@ -375,6 +376,8 @@
             }
 
             // 拦截 geocheck 和 create，将坐标统一修正为 GCJ-02（模拟/真实均有）
+            // 必须保留原始 body 中的其它字段（如 photoUrl、address、type、remark 等），
+            // 否则 attend.signin.create 会因缺少必填字段而被服务端拒绝。
             if (this._hr_url && (this._hr_url.indexOf('attend.signin.geocheck') !== -1 || this._hr_url.indexOf('attend.signin.create') !== -1)) {
                 var md5 = _hr_getMd5();
                 if (md5) {
@@ -390,13 +393,16 @@
                         }
                         if (wgs && typeof wgs.lng === 'number' && typeof wgs.lat === 'number' && !isNaN(wgs.lng) && !isNaN(wgs.lat)) {
                             var gcj = wgs84ToGcj02(wgs.lng, wgs.lat);
-                            var newBody = JSON.stringify({
-                                latitude: String(gcj.lat),
-                                longitude: String(gcj.lng),
-                                accuracy: wgs.accuracy,
-                                timestamp: req.timestamp,
-                                hash: md5([String(gcj.lat), String(gcj.lng), wgs.accuracy, req.timestamp, 'hcm cloud'].join(''))
-                            });
+                            var bd = wgs84ToBd09(wgs.lng, wgs.lat);
+                            // 递归替换所有 lat/lng 字段（支持嵌套结构），保留其它字段
+                            var newReq = _hr_fixEncryptWgsBody(req, bd, gcj);
+                            // 确保顶层字段存在并统一为 GCJ-02
+                            newReq.latitude = String(gcj.lat);
+                            newReq.longitude = String(gcj.lng);
+                            newReq.accuracy = wgs.accuracy;
+                            newReq.timestamp = newReq.timestamp || req.timestamp;
+                            newReq.hash = md5([String(newReq.latitude), String(newReq.longitude), newReq.accuracy, newReq.timestamp, 'hcm cloud'].join(''));
+                            var newBody = JSON.stringify(newReq);
                             console.log('[HR] API 请求已修正为 GCJ-02:', this._hr_url.split('/').pop(), newBody);
                             return origSend.call(this, newBody);
                         }
