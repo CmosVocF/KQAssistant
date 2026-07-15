@@ -343,6 +343,30 @@
             }
             return obj;
         }
+        // 同步 create 请求体中 information 字段里的 origin_geo 坐标，使其与顶层坐标一致
+        // 否则服务端校验 origin_geo（原始 GPS）与顶层 GCJ-02 不一致会拒绝打卡
+        function _hr_fixCreateInformation(infoStr, wgs, gcj) {
+            if (!infoStr) return infoStr;
+            var info;
+            if (typeof infoStr === 'string') {
+                try { info = JSON.parse(infoStr); } catch(e) { return infoStr; }
+            } else if (typeof infoStr === 'object') {
+                info = infoStr;
+            } else {
+                return infoStr;
+            }
+            if (info && info.origin_geo && info.origin_geo.location) {
+                // origin_geo.coord_type 为 "gps"，应使用 WGS-84 坐标
+                info.origin_geo.location.lat = wgs.lat;
+                info.origin_geo.location.lng = wgs.lng;
+                info.origin_geo.location.accuracy = wgs.accuracy;
+                if (typeof info.distance === 'number') info.distance = 0;
+            }
+            if (typeof infoStr === 'string') {
+                try { return JSON.stringify(info); } catch(e) { return infoStr; }
+            }
+            return info;
+        }
 
         XMLHttpRequest.prototype.send = function(body) {
             // SDK 把 Was.exec 返回的 BD-09 发给 position.gcj.encryptwgs，但该接口要求 GCJ-02，会 500。
@@ -401,6 +425,10 @@
                             newReq.longitude = String(gcj.lng);
                             newReq.accuracy = wgs.accuracy;
                             newReq.timestamp = newReq.timestamp || req.timestamp;
+                            // 同步 information 中的 origin_geo，使原始定位坐标与当前使用坐标一致
+                            if (newReq.information) {
+                                newReq.information = _hr_fixCreateInformation(newReq.information, wgs, gcj);
+                            }
                             newReq.hash = md5([String(newReq.latitude), String(newReq.longitude), newReq.accuracy, newReq.timestamp, 'hcm cloud'].join(''));
                             var newBody = JSON.stringify(newReq);
                             console.log('[HR] API 请求已修正为 GCJ-02:', this._hr_url.split('/').pop(), newBody);
