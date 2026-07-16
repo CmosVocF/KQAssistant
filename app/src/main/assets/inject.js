@@ -5,34 +5,6 @@
     if (window.__HR_PUNCH_INJECTED) return;
     window.__HR_PUNCH_INJECTED = true;
 
-    // ---- 诊断：定位 SDK 中计算最终显示坐标的函数 ----
-    (function() {
-        var orig = console.log;
-        function _hr_safeString(a) {
-            try {
-                if (a === null) return 'null';
-                if (a === undefined) return 'undefined';
-                if (typeof a === 'string') return a;
-                if (typeof a === 'number' || typeof a === 'boolean') return String(a);
-                if (typeof a === 'function') return '[Function]';
-                if (typeof a === 'symbol') return a.toString();
-                try { return JSON.stringify(a); } catch(ee) {}
-                return Object.prototype.toString.call(a);
-            } catch(e) { return '[unstringifiable]'; }
-        }
-        console.log = function() {
-            var args = Array.prototype.slice.call(arguments);
-            try {
-                var msg = args.map(_hr_safeString).join(' ');
-                if (msg.indexOf('kk gcj translate wgs success') !== -1) {
-                    console.error('[HR-DIAG] 发现最终显示坐标计算点，调用栈：');
-                    console.error((new Error('HR-DIAG')).stack);
-                }
-            } catch(e) {}
-            return orig.apply(console, args);
-        };
-    })();
-
     console.log('[HR] 注入脚本启动');
 
     // ========================================================
@@ -319,7 +291,7 @@
             return true;
         }
         // 递归替换请求体中的坐标字段：把无效坐标或 BD-09 坐标统一换成 GCJ-02
-        // 用于 position.gcj.encryptwgs、attend.signin.geocheck、attend.signin.create 等接口
+        // 用于 position.gcj.encryptwgs、attend.signin.geocheck 等接口
         function _hr_fixEncryptWgsBody(obj, bd, gcj) {
             if (!obj || typeof obj !== 'object') return obj;
             if (Array.isArray(obj)) {
@@ -343,31 +315,6 @@
             }
             return obj;
         }
-        // 同步 create 请求体中 information 字段里的 origin_geo 坐标，使其与顶层坐标一致
-        // 否则服务端校验 origin_geo（原始 GPS）与顶层 GCJ-02 不一致会拒绝打卡
-        function _hr_fixCreateInformation(infoStr, wgs, gcj) {
-            if (!infoStr) return infoStr;
-            var info;
-            if (typeof infoStr === 'string') {
-                try { info = JSON.parse(infoStr); } catch(e) { return infoStr; }
-            } else if (typeof infoStr === 'object') {
-                info = infoStr;
-            } else {
-                return infoStr;
-            }
-            if (info && info.origin_geo && info.origin_geo.location) {
-                // origin_geo.coord_type 为 "gps"，应使用 WGS-84 坐标
-                info.origin_geo.location.lat = wgs.lat;
-                info.origin_geo.location.lng = wgs.lng;
-                info.origin_geo.location.accuracy = wgs.accuracy;
-                if (typeof info.distance === 'number') info.distance = 0;
-            }
-            if (typeof infoStr === 'string') {
-                try { return JSON.stringify(info); } catch(e) { return infoStr; }
-            }
-            return info;
-        }
-
         XMLHttpRequest.prototype.send = function(body) {
             // SDK 把 Was.exec 返回的 BD-09 发给 position.gcj.encryptwgs，但该接口要求 GCJ-02，会 500。
             // 这里把请求体里的 BD-09 坐标替换为 GCJ-02；若坐标尚未就绪则等待。
@@ -399,10 +346,10 @@
                 return;
             }
 
-            // 拦截 geocheck 和 create，将坐标统一修正为 GCJ-02（模拟/真实均有）
-            // 必须保留原始 body 中的其它字段（如 photoUrl、address、type、remark 等），
-            // 否则 attend.signin.create 会因缺少必填字段而被服务端拒绝。
-            if (this._hr_url && (this._hr_url.indexOf('attend.signin.geocheck') !== -1 || this._hr_url.indexOf('attend.signin.create') !== -1)) {
+            // 拦截 geocheck，将坐标统一修正为 GCJ-02（模拟/真实均有）
+            // create 不再拦截：页面通过 position.gcj.encryptwgs 拿到正确坐标后自行组装 body，
+            // 旧版 debug 就是这样正常打卡的。
+            if (this._hr_url && this._hr_url.indexOf('attend.signin.geocheck') !== -1) {
                 var md5 = _hr_getMd5();
                 if (md5) {
                     try {
@@ -425,10 +372,6 @@
                             newReq.longitude = String(gcj.lng);
                             newReq.accuracy = wgs.accuracy;
                             newReq.timestamp = newReq.timestamp || req.timestamp;
-                            // 同步 information 中的 origin_geo，使原始定位坐标与当前使用坐标一致
-                            if (newReq.information) {
-                                newReq.information = _hr_fixCreateInformation(newReq.information, wgs, gcj);
-                            }
                             newReq.hash = md5([String(newReq.latitude), String(newReq.longitude), newReq.accuracy, newReq.timestamp, 'hcm cloud'].join(''));
                             var newBody = JSON.stringify(newReq);
                             console.log('[HR] API 请求已修正为 GCJ-02:', this._hr_url.split('/').pop(), newBody);
