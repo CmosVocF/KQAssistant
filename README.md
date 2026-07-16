@@ -258,13 +258,13 @@ WGS-84 --(国家加密)--> GCJ-02 --(百度二次加密)--> BD-09
 
 ## 版本
 
-当前版本：**1.2.10**
+当前版本：**1.2.11**
 
 主要变更：
 
-- 修复 `attend.signin.create` 500 错误：移除对该接口的 XHR 拦截，恢复旧版 debug 的成功模式。
+- 模拟定位（预设/手动坐标）使用时加入约 10 米半径的随机偏移，避免每次打卡经纬度完全一致。
+- 移除 `attend.signin.create` 的 XHR 拦截，恢复旧版 debug 的成功模式。
 - `position.gcj.encryptwgs` 仍修正为 GCJ-02，`attend.signin.geocheck` 仍修正为 GCJ-02。
-- 合并 v1.2.8/v1.2.9 中对 `create` body 的字段保留与 `origin_geo` 同步尝试，最终确定由页面自行组装正确 body。
 - 移除所有硬编码默认坐标，未选点时不再 fallback 到任何固定地址。
 - 模拟定位开启前强制校验坐标有效性。
 - 图片 EXIF GPS 改为从 WebView 动态读取用户所选坐标。

@@ -113,12 +113,35 @@
         }
     };
 
-    // 当前使用的 WGS-84 坐标：fake 开启时用假坐标，否则用真实坐标
+    // 模拟坐标随机偏移：每次使用预设/手动坐标时加入少量抖动，避免每次打卡经纬度完全一致
+    // 偏移控制在半径约 10 米内，不会掉出正常打卡范围
+    var _hr_jitter = null;
+    var _hr_jitter_ts = 0;
+    var _hr_JITTER_TTL_MS = 5000;
+    var _hr_JITTER_MAX_M = 0.00009; // 约 10 米
+    function _hr_resetJitter() { _hr_jitter = null; _hr_jitter_ts = 0; }
+    function _hr_applyJitter(lng, lat) {
+        var now = Date.now();
+        if (_hr_jitter && (now - _hr_jitter_ts) < _hr_JITTER_TTL_MS) {
+            return { lng: lng + _hr_jitter.dLng, lat: lat + _hr_jitter.dLat };
+        }
+        var angle = Math.random() * 2 * Math.PI;
+        var r = Math.sqrt(Math.random()) * _hr_JITTER_MAX_M;
+        // 纬度方向 1° ≈ 111km；经度方向按纬度修正，保证近似圆形分布
+        var dLat = r * Math.sin(angle);
+        var dLng = r * Math.cos(angle) / Math.max(0.1, Math.cos(lat * Math.PI / 180));
+        _hr_jitter = { dLng: dLng, dLat: dLat };
+        _hr_jitter_ts = now;
+        return { lng: lng + dLng, lat: lat + dLat };
+    }
+
+    // 当前使用的 WGS-84 坐标：fake 开启时用假坐标（带抖动），否则用真实坐标
     function getCurrentWgsCoords() {
         if (_hr_use_fake) {
             if (FAKE_LNG !== null && FAKE_LAT !== null && typeof FAKE_LNG === 'number' && typeof FAKE_LAT === 'number' &&
                 !isNaN(FAKE_LNG) && !isNaN(FAKE_LAT)) {
-                return { lng: FAKE_LNG, lat: FAKE_LAT, accuracy: 10 };
+                var j = _hr_applyJitter(FAKE_LNG, FAKE_LAT);
+                return { lng: j.lng, lat: j.lat, accuracy: 10 };
             }
             return null; // 模拟坐标未设置，不能返回硬编码默认值
         }
@@ -715,6 +738,7 @@
             FAKE_LNG = wgs.lng;
             FAKE_LAT = wgs.lat;
             updateNativeFakeCoords();
+            _hr_resetJitter();
         }
 
         _hr_use_fake = !!enabled;
@@ -1010,6 +1034,7 @@
         if (!p) return;
         document.getElementById('hr_lng').value = p.lng.toFixed(7);
         document.getElementById('hr_lat').value = p.lat.toFixed(7);
+        _hr_resetJitter();
 
         var chips = document.querySelectorAll('#hr_presets_bar span');
         chips.forEach(function(c, i) {
@@ -1066,6 +1091,7 @@
         FAKE_LNG = wgs.lng;
         FAKE_LAT = wgs.lat;
         updateNativeFakeCoords();
+        _hr_resetJitter();
 
         // 通过 Angular 的 rootScope 广播事件（GCJ-02）
         try {
