@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- 默认放行明文流量：考试门户的 autoexam.js 需要 fetch 连接 PC 上的
+         Autoexam 后端 http://<局域网IP>:8765（后端 IP 不固定，无法逐一列出）。
+         下方 domain-config 仅对列出的 https 站点保持禁明文，退回原有严格策略。 -->
+    <base-config cleartextTrafficPermitted="true" />
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">hr-mobile.hncsmtr.com</domain>
         <domain includeSubdomains="true">restapi.amap.com</domain>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>KQ助手</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans", "Microsoft YaHei", sans-serif;
+    background: #fff;
+    color: #1f2328;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+    padding: 32px 24px calc(24px + env(safe-area-inset-bottom));
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* 中央 logo = App 图标（内嵌 SVG，与系统图标同一套图形与配色 #4A6CF7） */
+  .logo {
+    width: 96px; height: 96px;
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 10px 26px rgba(74, 108, 247, .30);
+    margin-bottom: 18px;
+  }
+  .logo svg { display: block; width: 100%; height: 100%; }
+
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: 1px; color: #111; margin-bottom: 6px; }
+  .sub { font-size: 13px; color: #8b949e; margin-bottom: 40px; }
+
+  .cards { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 14px; }
+  .card {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; padding: 18px 20px;
+    background: #f6f8fa;
+    border: 1px solid #e5e8ec; border-radius: 14px;
+    color: #1f2328; text-align: left; font-family: inherit; cursor: pointer;
+    transition: background .12s ease, transform .1s ease;
+    -webkit-appearance: none; appearance: none;
+  }
+  .card:active { transform: scale(.98); background: #eef1f5; }
+  .card .name { font-size: 17px; font-weight: 600; }
+  .card .desc { font-size: 12px; color: #8b949e; margin-top: 3px; }
+  .card .arrow { margin-left: auto; color: #b6bdc7; font-size: 20px; }
+
+  .footer { position: fixed; bottom: 16px; font-size: 11px; color: #c6ccd4; }
+</style>
+</head>
+<body>
+  <div class="logo">
+    <svg viewBox="0 0 108 108" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="App 图标">
+      <rect width="108" height="108" fill="#4A6CF7"/>
+      <circle cx="54" cy="30" r="14" fill="#FFFFFF"/>
+      <path d="M40,60 L68,60 L68,58 L54,42 L40,58 Z" fill="#FFFFFF"/>
+      <path d="M54,70 L54,85" stroke="#FFFFFF" stroke-width="3"/>
+      <path d="M44,85 L64,85" stroke="#FFFFFF" stroke-width="3"/>
+    </svg>
+  </div>
+
+  <h1>KQ助手</h1>
+  <p class="sub">请选择要进入的系统</p>
+
+  <div class="cards">
+    <button class="card" type="button" onclick="HRBridge.openSite('hr')">
+      <div>
+        <div class="name">人力资源</div>
+        <div class="desc">考勤 · 打卡</div>
+      </div>
+      <span class="arrow">›</span>
+    </button>
+    <button class="card" type="button" onclick="HRBridge.openSite('exam')">
+      <div>
+        <div class="name">员工培训</div>
+        <div class="desc">在线考试 · 自动答题</div>
+      </div>
+      <span class="arrow">›</span>
+    </button>
+  </div>
+
+  <div class="footer">本地引导页 · 不占用网络</div>
+</body>
+</html>

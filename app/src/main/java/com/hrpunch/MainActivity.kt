@@ -5,14 +5,13 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ProgressBar
 import androidx.appcompat.app.AppCompatActivity
-import androidx.webkit.WebSettingsCompat
-import androidx.webkit.WebViewFeature
 
 @SuppressLint("SetJavaScriptEnabled")
 class MainActivity : AppCompatActivity() {
@@ -22,6 +21,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prefs: android.content.SharedPreferences
     private lateinit var imagePluginHandler: ImagePluginHandler
     private lateinit var locationHelper: LocationHelper
+
+    // ============ 本地引导页 + 双系统（同一个 WebView、同一套 SSO Cookie） ============
+    private val LAUNCHER_URL = "file:///android_asset/launcher.html"
+
+    // 人力资源系统(KK 人力门户) -> 注入 assets/inject.js
+    private val HR_HOST = "hr-mobile.hncsmtr.com"
+    private val HR_URL =
+        "https://hr-mobile.hncsmtr.com:7443/login?sso=customer_sso&next=/&j_lang=zh-CN"
+    // 员工培训系统(wethink) -> 注入 assets/autoexam.js（需 PC 上跑 Autoexam 的 Python 后端）
+    // 两个系统都走 SSO 登录，共用同一套 Cookie。
+    private val EXAM_HOST = "hrt-mobile.hncsmtr.com"
+    private val EXAM_URL = "https://hrt-mobile.hncsmtr.com:8085/mobile/ssoLogin?j_lang=zh-CN"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,10 +52,15 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
+        // 接受并持久化 Cookie：两个系统共用同一套 SSO 登录 Cookie，
+        // 退出 App 再进入时尽量保持登录态。
+        CookieManager.getInstance().setAcceptCookie(true)
+
         // 启动真实定位（请求权限 + 每 5 秒刷新）
         locationHelper.start(this)
 
-        webView.loadUrl("https://hr-mobile.hncsmtr.com:7443/login?sso=customer_sso&next=/&j_lang=zh-CN")
+        // 首次进入本地引导页，由用户选择进入哪个系统
+        webView.loadUrl(LAUNCHER_URL)
     }
 
     private fun generateUA(): String {
@@ -82,7 +98,10 @@ class MainActivity : AppCompatActivity() {
             setGeolocationEnabled(true)
             allowFileAccess = false
             allowContentAccess = false
-            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            // 说明: 打卡门户与考试门户都是 https, 但考试门户的 autoexam.js 需要
+            //       fetch() 连 PC 上的后端 http://<局域网IP>:8765 (https 页面 -> http 请求为混合内容),
+            //       因此这里放行混合内容; 后端明文流量由 network_security_config 放行。
             useWideViewPort = true
             loadWithOverviewMode = true
             builtInZoomControls = true
@@ -91,16 +110,17 @@ class MainActivity : AppCompatActivity() {
             userAgentString = getSavedUA()
         }
 
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-            WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, true)
-        }
-
-        webView.addJavascriptInterface(JSBridge(this, locationHelper) { newUa ->
-            runOnUiThread {
-                webView.settings.userAgentString = newUa
-                webView.loadUrl(webView.url ?: "https://hr-mobile.hncsmtr.com:7443/login?sso=customer_sso&next=/&j_lang=zh-CN")
-            }
-        }, "HRBridge")
+        webView.addJavascriptInterface(JSBridge(
+            context = this,
+            locationHelper = locationHelper,
+            onUaChanged = { newUa ->
+                runOnUiThread {
+                    webView.settings.userAgentString = newUa
+                    webView.loadUrl(webView.url ?: HR_URL)
+                }
+            },
+            onOpenSite = { site -> runOnUiThread { openSite(site) } }
+        ), "HRBridge")
 
         // 注册 KK 原生桥接 __js2java_proxy，处理 gps 定位插件和图片插件
         imagePluginHandler = ImagePluginHandler(this, webView)
@@ -109,12 +129,12 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                injectScript()
+                injectScript(url)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                injectScript()
+                injectScript(url)
             }
 
             override fun shouldOverrideUrlLoading(
@@ -143,23 +163,79 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun injectScript() {
+    /**
+     * 按当前页面 host 选择注入哪份 JS（两份脚本保持独立，互不合并）：
+     *  - 打卡门户 (hr-mobile.hncsmtr.com)  -> assets/inject.js   (HR 打卡助手)
+     *  - 考试门户 (hrt-mobile.hncsmtr.com) -> assets/autoexam.js (自动答题助手)
+     *  - 其它页面                            不注入(例如地图外链等)
+     */
+    private fun injectScript(url: String?) {
+        val host = try {
+            android.net.Uri.parse(url ?: webView.url ?: "").host ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+        val scriptName = when (host) {
+            EXAM_HOST -> "autoexam.js"   // 考试门户: 答题助手
+            HR_HOST -> "inject.js"       // 打卡门户: HR 打卡助手
+            else -> return               // 其它页面不注入
+        }
         try {
-            val script = assets.open("inject.js")
+            val script = assets.open(scriptName)
                 .bufferedReader()
                 .use { it.readText() }
             webView.evaluateJavascript(script, null)
         } catch (e: Exception) {
-            android.util.Log.e("HRPunch", "注入脚本失败", e)
+            android.util.Log.e("HRPunch", "注入脚本$scriptName 失败", e)
         }
     }
 
     override fun onBackPressed() {
+        val url = webView.url ?: ""
+        // 引导页 -> 直接退出应用
+        if (url.startsWith("file://")) {
+            super.onBackPressed()
+            return
+        }
         if (webView.canGoBack()) {
             webView.goBack()
         } else {
-            super.onBackPressed()
+            // 系统首页没有历史记录时，返回本地引导页
+            webView.loadUrl(LAUNCHER_URL)
         }
+    }
+
+    /** 引导页桥接：切换到指定系统。 */
+    private fun openSite(site: String) {
+        when (site) {
+            "hr" -> webView.loadUrl(HR_URL)
+            "exam" -> webView.loadUrl(EXAM_URL)
+            "home" -> webView.loadUrl(LAUNCHER_URL)
+        }
+    }
+
+    /** 把当前 Cookie 强制写盘，避免进程被杀时登录态丢失。 */
+    private fun flushCookies() {
+        try {
+            CookieManager.getInstance().flush()
+        } catch (e: Exception) {
+            android.util.Log.w("HRPunch", "Cookie flush 失败", e)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        flushCookies()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        flushCookies()
+    }
+
+    override fun onDestroy() {
+        flushCookies()
+        super.onDestroy()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
