@@ -10,8 +10,8 @@ import urllib.error
 
 BASE = 'http://127.0.0.1:8766'
 KEY = 'test-secret-123-xyz'
-VICTIM = r'D:\Autoexam\tools\_deploytest\victim_docs'
-BIG = r'D:\Autoexam\tools\_deploytest\dos_big.xlsx'
+VICTIM = r'D:\KQAssistant\modules\autoexam\tools\_deploytest\victim_docs'
+BIG = r'D:\KQAssistant\modules\autoexam\tools\_deploytest\dos_big.xlsx'
 KEYHDR = {'X-API-Key': KEY}
 
 
@@ -92,12 +92,12 @@ for i in range(70):
 check('query 触发限流(429)', got429, f'status最后={st}')
 
 # 大文件(5.4MB>max 5MB)放入允许目录内，reload 应被快速跳过
-os.makedirs(os.path.join(r'D:\Autoexam\exambank', '_DoS'), exist_ok=True)
-shutil.copy(BIG, os.path.join(r'D:\Autoexam\exambank', '_DoS', 'big.xlsx'))
-st, _, data, dt = req('POST', '/api/reload', {'folder': r'D:\Autoexam\exambank\_DoS'}, headers=KEYHDR, timeout=30)
+os.makedirs(os.path.join(r'D:\KQAssistant\modules\autoexam\exambank', '_DoS'), exist_ok=True)
+shutil.copy(BIG, os.path.join(r'D:\KQAssistant\modules\autoexam\exambank', '_DoS', 'big.xlsx'))
+st, _, data, dt = req('POST', '/api/reload', {'folder': r'D:\KQAssistant\modules\autoexam\exambank\_DoS'}, headers=KEYHDR, timeout=30)
 j = json.loads(data) if data else {}
 check('超大文件被跳过(不加载12万题)', st == 200 and j.get('questions', 999999) == 0, f'status={st} q={j.get("questions")} 用时{dt:.2f}s')
-shutil.rmtree(os.path.join(r'D:\Autoexam\exambank', '_DoS'), ignore_errors=True)
+shutil.rmtree(os.path.join(r'D:\KQAssistant\modules\autoexam\exambank', '_DoS'), ignore_errors=True)
 
 print('=' * 78)
 print('加固复测 E —— 恢复正常后查询可用')

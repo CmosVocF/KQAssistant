@@ -7,7 +7,7 @@ import re
 import urllib.request
 
 BASE = 'http://127.0.0.1:8765'
-page = json.load(open(r'D:\Autoexam\tools\_page_questions.json', encoding='utf-8'))
+page = json.load(open(r'D:\KQAssistant\modules\autoexam\tools\_page_questions.json', encoding='utf-8'))
 header = '1.《国务院办公厅关于保障城市轨道交通安全运行的意见》题库练习'
 bank_filter = re.findall(r'《[^》]*》', header)[0]
 

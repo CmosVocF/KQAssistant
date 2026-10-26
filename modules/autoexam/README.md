@@ -94,10 +94,10 @@ python server.py
 ## 换题库（很重要的一节）
 
 后端启动（或点「重载题库」）时会**递归扫描** `config.json` 里的 `bank_folder`（默认
-`D:\Autoexam\exambank`）下**所有子目录**里的 `*.xlsx`。所以题库可以随意归档：
+`modules/autoexam/exambank`）下**所有子目录**里的 `*.xlsx`。所以题库可以随意归档：
 
 ```
-D:\Autoexam\exambank\
+modules/autoexam/exambank\
   ├─ 交通运输部政策法规练习题库20260605\1.《…》题库.xlsx   ← 现有题库
   ├─ 2026新题库\xx.xlsx                                    ← 以后新增，随便建文件夹
   └─ 更深的层级\再放一层.xlsx                              ← 任意层级都行

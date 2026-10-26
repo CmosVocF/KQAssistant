@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """Validate the matcher against the real page questions and real banks."""
 import json, sys, re
-sys.path.insert(0, r'D:\Autoexam\backend')
+sys.path.insert(0, r'D:\KQAssistant\modules\autoexam\backend')
 
 from bank_loader import QuestionBank
 from search import search_bank
 from matcher import normalize
 
-BANK_FOLDER = r'D:\Autoexam\exambank'
+BANK_FOLDER = r'D:\KQAssistant\modules\autoexam\exambank'
 
-with open(r'D:\Autoexam\tools\_page_questions.json', 'r', encoding='utf-8') as f:
+with open(r'D:\KQAssistant\modules\autoexam\tools\_page_questions.json', 'r', encoding='utf-8') as f:
     page_qs = json.load(f)
 
 # header of the page -> bank filter

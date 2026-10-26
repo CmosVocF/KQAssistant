@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Answer-format parsing compatibility test (different bank conventions)."""
 import sys
-sys.path.insert(0, r'D:\Autoexam\backend')
+sys.path.insert(0, r'D:\KQAssistant\modules\autoexam\backend')
 from bank_loader import parse_answer_ids, match_answer_text_to_options
 
 cases = ['1,3', 'ABD', 'ab', 'b', '(A)、C', '0,2', '②', 'A.', '第3个', '1 3', 'A,C,D', '2']

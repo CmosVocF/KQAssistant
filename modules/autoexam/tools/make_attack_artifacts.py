@@ -3,7 +3,7 @@
 import os
 import openpyxl
 
-ROOT = r'D:\Autoexam\tools\_deploytest'
+ROOT = r'D:\KQAssistant\modules\autoexam\tools\_deploytest'
 VICTIM = os.path.join(ROOT, 'victim_docs')
 os.makedirs(VICTIM, exist_ok=True)
 

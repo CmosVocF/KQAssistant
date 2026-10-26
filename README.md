@@ -68,12 +68,12 @@ https://hr-mobile.hncsmtr.com:7443/login?sso=customer_sso&next=/&j_lang=zh-CN
 - **返回引导页**：两个系统的首页没有返回历史时，按系统返回键（或导航栏返回）即回到本地引导页；
   在引导页按返回则退出应用。
 - **两份 JS 完全独立、互不合并**：`inject.js` 保持原样；`autoexam.js` 来自
-  `D:\Autoexam\userscript\autoexam.user.js`（去掉油猴元数据、加防重复注入守卫，
+  `modules/autoexam/userscript/autoexam.user.js`（去掉油猴元数据、加防重复注入守卫，
   并对 WebView 做了手机适配——面板显式配色、宽度自适应；系统菜单改用本地引导页后已移除）。
 
 ### 考试答题仍需 PC 上的 Autoexam 后端
 
-- **Python 后端完全不动**：在 PC 上运行 `D:\Autoexam\start_server.bat`（或 `python backend\server.py`），
+- **Python 后端完全不动**：在 PC 上运行 `modules/autoexam/start_server.bat`（或 `python backend\server.py`），
   API 在 `http://127.0.0.1:8765`。
 - **手机真机连后端**：手机上的 `127.0.0.1` 指向的是手机自身，不是 PC。请在考试页面板的
   「后端」输入框里改成 PC 的局域网 IP，例如 `http://192.168.1.10:8765`（用 `ipconfig` 查 PC 实际 IP；

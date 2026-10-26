@@ -7,8 +7,8 @@ import urllib.request
 import urllib.error
 
 BASE = 'http://127.0.0.1:8766'
-VICTIM = r'D:\Autoexam\tools\_deploytest\victim_docs'
-BIG = r'D:\Autoexam\tools\_deploytest'
+VICTIM = r'D:\KQAssistant\modules\autoexam\tools\_deploytest\victim_docs'
+BIG = r'D:\KQAssistant\modules\autoexam\tools\_deploytest'
 
 
 def req(method, path, payload=None, headers=None, timeout=30):

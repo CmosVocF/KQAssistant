@@ -2,7 +2,7 @@
 """Parse wethink-mobile.html and extract all questions into JSON for testing."""
 import re, json, html as html_mod
 
-with open(r'D:\Autoexam\wethink-mobile.html', 'r', encoding='utf-8') as fh:
+with open(r'D:\KQAssistant\modules\autoexam\page-archive\wethink-mobile.html', 'r', encoding='utf-8') as fh:
     html = fh.read()
 
 markers = [m.start() for m in re.finditer(r'class="topic-mc white-bg', html)]
@@ -53,7 +53,7 @@ for idx, m in enumerate(markers):
         opts.append(otxt)
     questions.append({'num': qnum, 'type': qtype, 'stem': stem, 'options': opts, 'ul_class': ulcls})
 
-with open(r'D:\Autoexam\_page_questions.json', 'w', encoding='utf-8') as f:
+with open(r'D:\KQAssistant\modules\autoexam\tools\_page_questions.json', 'w', encoding='utf-8') as f:
     json.dump(questions, f, ensure_ascii=False, indent=2)
 
 for q in questions[:6]:
