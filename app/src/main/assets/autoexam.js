@@ -1,8 +1,28 @@
-// 自动答题助手 (Autoanswer) — WebView 版 (autoexam.js)
-// 来源: D:\Autoexam\userscript\autoexam.user.js v1.6.3 (保持独立, 不与 inject.js 合并; 已套用手机 WebView 适配)
-// 注入: 由 KQAssistant MainActivity 在进入 hrt-mobile.hncsmtr.com 时注入本脚本; 打卡页注入 inject.js, 互不干扰。
-// 兼容: 无油猴环境自动回退: GM_xmlhttpRequest->fetch(), GM_getValue/Set->localStorage; 另有 App 原生网络桥 HRBridge.nativeApi。
-// 后端: Python 后端在 PC 上运行, 默认 http://127.0.0.1:8765; 手机真机上请在面板"后端"改成 PC 局域网 IP。
+// ============================================================================
+// 自动答题助手（App 适配版）— 安卓 WebView 运行时注入使用
+// ----------------------------------------------------------------------------
+// 本文件是 KQAssistant 安卓 App 打包进 APK 的注入脚本（MainActivity 进入
+// hrt-mobile.hncsmtr.com 时注入），为默认使用的版本；答题逻辑与 PC 油猴版一致。
+//
+// PC 油猴原版（未做 App 适配）位于：modules/autoexam/userscript/autoexam.user.js
+// 本 App 适配版位于：              app/src/main/assets/autoexam.js
+//
+// 与 PC 原版的差异（均为 App/WebView 环境适配，不含答题逻辑改动）：
+//   1) 头部元数据：PC 版有 ==UserScript== 区（@match/@grant/@connect，含 www.ep2w.fun），
+//      本版用注释头替代（WebView 不解析油猴元数据）。
+//   2) 防重复注入：新增 window.__AUTOEXAM_INJECTED 守卫（App 在 onPageStarted 与
+//      onPageFinished 各注入一次，不守卫会执行两遍）。
+//   3) 面板样式：桌面固定 310px → 手机适配（min(310px, calc(100vw-16px))、
+//      显式配色防白字、-webkit-appearance 规范化）。
+//   4) 网络请求通道：PC 用 GM_xmlhttpRequest（可绕 CORS）；本版优先走
+//      HRBridge.nativeApi（Android 原生请求，绕浏览器 CORS），不可用时回退 fetch。
+//   5) 后端地址持久化：本版用 HRBridge.getApiUrl/setApiUrl（SharedPreferences，
+//      不受 http/https 不同源 localStorage 影响），并在加载时写回 CFG.api。
+//
+// 其余（题目解析、匹配归一化 numCmpKey/dateCmpKey、单选/多选/判断点击、
+// 逐项等待 Vue 刷新等）与 PC 原版完全相同。
+// 修改答题逻辑时请两边同步；本文件由 tools/sync_autoexam.ps1 从 PC 版生成。
+// ============================================================================
 (function () {
     'use strict';
     if (window.__AUTOEXAM_INJECTED) return;
@@ -84,7 +104,8 @@
                     if (r && r.ok) done(r.text); else fail(r.status || 0);
                     return;
                 } catch (e) { /* 原生桥异常则继续走 GM/fetch */ }
-            }            if (typeof GM_xmlhttpRequest === 'function') {
+            }
+            if (typeof GM_xmlhttpRequest === 'function') {
                 GM_xmlhttpRequest({
                     method, url: CFG.api + path, timeout: 15000,
                     data: payload ? JSON.stringify(payload) : undefined,

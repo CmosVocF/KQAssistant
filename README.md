@@ -100,26 +100,41 @@ https://hr-mobile.hncsmtr.com:7443/login?sso=customer_sso&next=/&j_lang=zh-CN
 ## 项目结构
 
 ```
-hr-punch-apk/
-├── app/
+KQAssistant/
+├── app/                              # Android 客户端（Kotlin + WebView）
 │   ├── build.gradle.kts              # 模块构建配置
 │   └── src/main/
 │       ├── AndroidManifest.xml       # 权限与组件声明
 │       ├── assets/
-│       │   └── inject.js             # WebView 注入脚本（核心逻辑）
+│       │   ├── inject.js             # 人力资源门户注入脚本
+│       │   ├── autoexam.js           # 员工培训注入脚本（App 适配版，默认使用；PC 原版见 modules/autoexam/userscript/）
+│       │   └── launcher.html         # 本地引导页
 │       ├── java/com/hrpunch/
-│       │   ├── MainActivity.kt       # WebView 初始化、页面加载
-│       │   ├── JSBridge.kt           # JS ↔ Native 通用桥
+│       │   ├── MainActivity.kt       # WebView 初始化、页面加载与按 host 分流注入
+│       │   ├── JSBridge.kt           # JS ↔ Native 通用桥（openSite / nativeApi / 地址持久化）
 │       │   ├── Js2JavaProxyBridge.kt # 模拟 __js2java_proxy，返回 BD-09
 │       │   ├── LocationHelper.kt     # Android GPS 获取与权限管理
 │       │   └── ImagePluginHandler.kt # 相机/图片处理与 EXIF GPS 写入
 │       └── res/                      # 布局、图标、主题等资源
+├── modules/                          # 配套功能模块（按功能分目录）
+│   └── autoexam/                     # 员工培训自动答题模块
+│       ├── backend/                  # Python FastAPI 后端（题库检索/答题）
+│       ├── exambank/                 # Excel 题库（递归扫描 *.xlsx）
+│       ├── userscript/               # PC 油猴原版 autoexam.user.js（与 App 适配版逻辑同源，仅差适配层）
+│       ├── page-archive/             # wethink 考试页存档（分析用）
+│       ├── tools/                    # 测试/验证脚本
+│       ├── start_server.bat          # 一键启动后端
+│       └── README.md                 # 模块说明
 ├── build.gradle.kts                  # 项目级构建配置
 ├── settings.gradle.kts               # Gradle 项目设置
 ├── gradle.properties                 # Gradle 属性
 ├── COORDINATE_SYSTEM_NOTES.md        # 坐标系问题排查与技术文档
 └── README.md                         # 本文件
 ```
+
+> 说明：Autoexam 项目已按功能并入本仓库 `modules/autoexam/`；后续新增功能模块同样放在
+> `modules/<模块名>/` 下，与 App 主体隔离。`env/`、`build/`、`local.properties`、`node_modules/`
+> 等本地产物已在 `.gitignore` 中排除。
 
 ---
 

@@ -43,6 +43,13 @@ Thumbs.db
 # Node / JS (if any)
 node_modules/
 
+# Python (modules/autoexam/backend)
+__pycache__/
+*.pyc
+
+# 测试/敏感产物目录（不纳入仓库）
+_deploytest/
+
 # Temporary files
 *.tmp
 *.swp
