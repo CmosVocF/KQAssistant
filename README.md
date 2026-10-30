@@ -1,6 +1,7 @@
-# KQAssistant / HR 打卡助手
+# KQAssistant / KQ 助手
 
-一个基于 Android WebView 的辅助工具，用于在特定 Landray/KK 人力资源移动门户中注入自定义定位、相机与位置相关能力。应用通过 JavaScript 注入与原生的 Kotlin Bridge 配合，协调 WGS-84 / GCJ-02 / BD-09 三种坐标系，使页面显示、服务端校验与照片 EXIF 保持一致。
+基于 Android WebView 的内部工具集：**人力资源打卡**、**员工培训自动答题**、**镟轮数据自动填写**。
+应用通过 JavaScript 注入 + Kotlin 原生 Bridge，在同一个 WebView 中承载多个业务系统，并新增本地页面（作业管理 / 模型设置 / 图片识别 / 表格导出）。
 
 > **声明**：本工具仅用于合法授权的内部测试、自身考勤打卡或学习研究。请勿用于任何违反公司制度、法律法规或侵犯他人权益的场景。使用本工具产生的任何后果由使用者自行承担。
 
@@ -8,92 +9,68 @@
 
 ## 目录
 
-- [功能特性](#功能特性)
-- [适用场景](#适用场景)
+- [功能入口](#功能入口)
+- [镟轮数据模块](#镟轮数据模块)
 - [技术栈](#技术栈)
 - [项目结构](#项目结构)
-- [快速开始](#快速开始)
-  - [环境要求](#环境要求)
-  - [构建 Debug APK](#构建-debug-apk)
-  - [构建 Release APK](#构建-release-apk)
-  - [安装](#安装)
+- [构建](#构建)
 - [使用说明](#使用说明)
-  - [首次启动](#首次启动)
-  - [模拟定位](#模拟定位)
-  - [相机与图片](#相机与图片)
-  - [预设坐标](#预设坐标)
+  - [镟轮数据使用流程](#镟轮数据使用流程)
+  - [模型设置](#模型设置)
+  - [导出 Excel](#导出-excel)
+- [数据存储](#数据存储)
+- [版本与测试包](#版本与测试包)
 - [坐标系说明](#坐标系说明)
-- [核心实现](#核心实现)
 - [已知限制](#已知限制)
-- [排错记录](#排错记录)
 - [贡献与许可](#贡献与许可)
 
 ---
 
-## 功能特性
+## 功能入口
 
-- **WebView 注入**：在目标 HR 移动站点加载自定义 `inject.js`，接管定位、相机等 KK SDK API。
-- **模拟定位**：支持手动输入经纬度或在地图上选点，关闭模拟后恢复真实 GPS。
-- **坐标系自动转换**：内部统一使用 WGS-84，按需转换为 GCJ-02（高德/服务端）或 BD-09（KK SDK）。
-- **相机接管**：拦截 `Was.exec('image', ...)`，调用系统相机/相册，并将用户所选坐标写入照片 EXIF GPS。
-- **预设管理**：可保存常用坐标，支持长按删除。
-- **原生定位辅助**：当未开启模拟定位时，使用 Android `LocationManager` 提供真实坐标。
-- **KK SDK 兼容**：模拟 KK JS SDK 的 `Was.exec` / `Was.execA` / `Was.callbackResult` / `__js2java_proxy`。
+启动页（`assets/launcher.html`）提供三个入口，右上角 ⚙ 为**全局模型设置**：
 
----
+| 入口 | 地址/页面 | 注入/资源 | 用途 |
+|------|-----------|-----------|------|
+| 人力资源 | `hr-mobile.hncsmtr.com:7443` | `assets/inject.js` | HR 打卡（定位 / 相机 / 坐标） |
+| 员工培训 | `hrt-mobile.hncsmtr.com:8085` | `assets/autoexam.js` | 自动答题（配合 `modules/autoexam` 后端） |
+| 镟轮数据 | `assets/xuanlun.html`（本地） | `assets/xuanlun-*.{html,css,js}` | 拍照识数 → 自动填表 → 导出 xlsx |
 
-## 适用场景
-
-本应用针对以下地址进行适配：
-
-```
-https://hr-mobile.hncsmtr.com:7443/login?sso=customer_sso&next=/&j_lang=zh-CN
-```
-
-如果你需要适配其他 Landray/KK 站点，通常只需修改 `MainActivity.kt` 中的 `loadUrl` 地址，并视情况调整 `inject.js` 中的 URL/接口匹配逻辑。
+- 两个业务系统共用同一 WebView 与 Cookie（SSO）。
+- 镟轮数据为纯本地页面，不需要登录；识别调用用户在设置中配置的 OpenAI 兼容多模态模型。
 
 ---
 
-## 双门户合一（本地引导页 + 两个系统）
+## 镟轮数据模块
 
-应用用**同一个 WebView、同一套 Cookie** 承载员工培训与人力资源两个系统，首次打开进入
-**本地引导页**（`assets/launcher.html`），点击按钮进入对应系统，网页铺满手机屏幕：
+### 功能
 
-| 入口 | 登录地址 | 注入脚本 | 用途 |
-|------|----------|----------|------|
-| 人力资源 | `hr-mobile.hncsmtr.com:7443/login...` | `assets/inject.js` | HR 打卡助手（定位/相机/坐标） |
-| 员工培训 | `hrt-mobile.hncsmtr.com:8085/mobile/ssoLogin?j_lang=zh-CN` | `assets/autoexam.js` | 自动答题助手（配合 Autoexam 后端） |
+- **作业管理**：新建作业只填「线路 + 车号」，自动生成 6 节（如 4 号线 047048 → `04A047/04B047/04C047/04C048/04B048/04A048`）。
+- **每节独立参数**：日期、镟修人、复核人（各节可不同，本地持久化）。
+- **每轴上传**：`04A047-1 … -4` 各一行，点「上传照片」→ 应用内弹窗「拍照 / 从相册选择」。
+- **透视校正**：自动预检纸张四角，可拖动微调；确认后透视变换 + 灰度增强，保留原图与增强图。
+- **多模态识别**：调用当前模型提取 轮对ID/车辆ID/方向/加工前与加工后 的左/右轮 4 项数据；主模型失败自动回退备选模型。
+- **人工核对**：识别结果进入编辑页（上半屏图片、下半屏数据），可逐项修改后保存；方向 A-B/B-A 在编辑页设置，B-A 时填表自动交换左右轮。
+- **预览**：按模板版式复刻 15 列表格，公式（轮经差、轮径切削量、一转/二转/整节最大差值）实时计算。
+- **导出**：生成保留原公式与格式的 `.xlsx`（6 页整本），文件名 `{线路}号线轮对数据尺寸统计表{车号}车{YYYY年M月D日}.xlsx`。
 
-- 两套系统都走 SSO 登录、共用同一套 Cookie：在人力资源登录后，进员工培训会自动带登录态。
-- **返回引导页**：两个系统的首页没有返回历史时，按系统返回键（或导航栏返回）即回到本地引导页；
-  在引导页按返回则退出应用。
-- **两份 JS 完全独立、互不合并**：`inject.js` 保持原样；`autoexam.js` 来自
-  `modules/autoexam/userscript/autoexam.user.js`（去掉油猴元数据、加防重复注入守卫，
-  并对 WebView 做了手机适配——面板显式配色、宽度自适应；系统菜单改用本地引导页后已移除）。
+### 文件与数据结构
 
-### 考试答题仍需 PC 上的 Autoexam 后端
-
-- **Python 后端完全不动**：在 PC 上运行 `modules/autoexam/start_server.bat`（或 `python backend\server.py`），
-  API 在 `http://127.0.0.1:8765`。
-- **手机真机连后端**：手机上的 `127.0.0.1` 指向的是手机自身，不是 PC。请在考试页面板的
-  「后端」输入框里改成 PC 的局域网 IP，例如 `http://192.168.1.10:8765`（用 `ipconfig` 查 PC 实际 IP；
-  若连不上，确认后端能通过系统防火墙）。
-- 为支持「https 考试页 → 局域网 http 后端」的请求，已放行混合内容
-  （`MIXED_CONTENT_ALWAYS_ALLOW`）与局域网明文流量（`network_security_config` 的 `base-config`），
-  对 `hr-mobile` / 高德 / unpkg / OSM 等原有 https 域名仍保持禁明文。
+- 本地存储（SharedPreferences，JSON）：
+  - `xuanlun_data`：作业、每节参数、每轴数据与图片路径；
+  - `xuanlun_models`：服务商、模型库、当前/备选模型。
+- 图片：`/data/data/com.hrpunch/files/xuanlun/{作业}/{节}/{轴}.jpg`（增强图）与 `{轴}_orig.jpg`（原图）。
+- 空白模板：`assets/xuanlun/template.xlsx`（数据清空、公式/合并/样式保留）。
 
 ---
 
 ## 技术栈
 
-- **Kotlin**：原生 Android 逻辑（`MainActivity`、Bridge、定位、图片处理）。
-- **JavaScript**：WebView 注入脚本，负责坐标转换、DOM 面板、XHR 拦截、SDK API 模拟。
+- **Kotlin**：WebView 宿主、Bridge、相机/相册、透视校正、识别请求。
+- **JavaScript**：注入脚本 + 本地页面（作业、设置、编辑、预览、导出）。
+- **ExcelJS**：本地页面内读写 xlsx（`assets/exceljs.min.js`）。
 - **Android Gradle Plugin 8.x**，`compileSdk = 34`，`minSdk = 24`。
-- **依赖**：
-  - `androidx.core:core-ktx`
-  - `androidx.appcompat:appcompat`
-  - `com.google.android.material:material`
-  - `androidx.webkit:webkit`
+- 依赖：`androidx.core:core-ktx`、`androidx.appcompat:appcompat`、`material`、`androidx.webkit:webkit`。
 
 ---
 
@@ -101,274 +78,140 @@ https://hr-mobile.hncsmtr.com:7443/login?sso=customer_sso&next=/&j_lang=zh-CN
 
 ```
 KQAssistant/
-├── app/                              # Android 客户端（Kotlin + WebView）
-│   ├── build.gradle.kts              # 模块构建配置
+├── app/
+│   ├── build.gradle.kts                  # 版本号、APK 输出命名（KQAssistant-<版本>-<变体>.apk）
 │   └── src/main/
-│       ├── AndroidManifest.xml       # 权限与组件声明
+│       ├── AndroidManifest.xml
 │       ├── assets/
-│       │   ├── inject.js             # 人力资源门户注入脚本
-│       │   ├── autoexam.js           # 员工培训注入脚本（App 适配版，默认使用；PC 原版见 modules/autoexam/userscript/）
-│       │   └── launcher.html         # 本地引导页
+│       │   ├── launcher.html             # 本地引导页（三入口 + ⚙）
+│       │   ├── inject.js                 # 人力资源注入脚本
+│       │   ├── autoexam.js               # 员工培训注入脚本
+│       │   ├── xuanlun.css / xuanlun-common.js
+│       │   ├── xuanlun.html              # 作业列表
+│       │   ├── xuanlun-job.html          # 作业详情（预览/每轴上传）
+│       │   ├── xuanlun-edit.html         # 编辑页（上半图片/下半数据）
+│       │   ├── xuanlun-models.html       # 镟轮模型选择（当前/备选）
+│       │   ├── xuanlun-settings.html     # 模型设置（服务商/模型库/测试）
+│       │   ├── exceljs.min.js            # xlsx 读写库
+│       │   └── xuanlun/template.xlsx     # 空白模板（保留公式与格式）
 │       ├── java/com/hrpunch/
-│       │   ├── MainActivity.kt       # WebView 初始化、页面加载与按 host 分流注入
-│       │   ├── JSBridge.kt           # JS ↔ Native 通用桥（openSite / nativeApi / 地址持久化）
-│       │   ├── Js2JavaProxyBridge.kt # 模拟 __js2java_proxy，返回 BD-09
-│       │   ├── LocationHelper.kt     # Android GPS 获取与权限管理
-│       │   └── ImagePluginHandler.kt # 相机/图片处理与 EXIF GPS 写入
-│       └── res/                      # 布局、图标、主题等资源
-├── modules/                          # 配套功能模块（按功能分目录）
-│   └── autoexam/                     # 员工培训自动答题模块
-│       ├── backend/                  # Python FastAPI 后端（题库检索/答题）
-│       ├── exambank/                 # Excel 题库（递归扫描 *.xlsx）
-│       ├── userscript/               # PC 油猴原版 autoexam.user.js（与 App 适配版逻辑同源，仅差适配层）
-│       ├── page-archive/             # wethink 考试页存档（分析用）
-│       ├── tools/                    # 测试/验证脚本
-│       ├── start_server.bat          # 一键启动后端
-│       └── README.md                 # 模块说明
-├── build.gradle.kts                  # 项目级构建配置
-├── settings.gradle.kts               # Gradle 项目设置
-├── gradle.properties                 # Gradle 属性
-├── COORDINATE_SYSTEM_NOTES.md        # 坐标系问题排查与技术文档
-└── README.md                         # 本文件
+│       │   ├── MainActivity.kt           # WebView、注入分流、拍照/相册、识别
+│       │   ├── JSBridge.kt               # 通用桥（页面/存储/LLM/图片/xlsx/分享）
+│       │   ├── CropView.kt               # 四角透视校正视图
+│       │   ├── XuanlunCropActivity.kt    # 校正页（透视 + 增强 + 保存）
+│       │   ├── Js2JavaProxyBridge.kt
+│       │   ├── LocationHelper.kt
+│       │   └── ImagePluginHandler.kt
+│       └── res/
+├── modules/autoexam/                     # 培训自动答题（后端/题库/油猴脚本）
+├── tools/
+│   ├── build_apk.ps1                     # 构建并复制带版本号 APK 到 dist/
+│   └── sync_autoexam.ps1
+├── dist/                                 # 本地构建产物（.gitignore）
+└── README.md
 ```
-
-> 说明：Autoexam 项目已按功能并入本仓库 `modules/autoexam/`；后续新增功能模块同样放在
-> `modules/<模块名>/` 下，与 App 主体隔离。`env/`、`build/`、`local.properties`、`node_modules/`
-> 等本地产物已在 `.gitignore` 中排除。
 
 ---
 
-## 快速开始
+## 构建
 
-### 环境要求
+环境：JDK 17、Android SDK（API 34 编译）、Build-Tools。
 
-- JDK 17+
-- Android SDK（API 34 编译，API 24 起可安装）
-- Android SDK Build-Tools（用于 `aapt` 验证等可选操作）
-- 一台 Android 设备或模拟器（用于运行测试）
+```powershell
+# 方式一：脚本（自动设置 JAVA_HOME/GRADLE_USER_HOME，并把 APK 复制到 dist\）
+powershell -ExecutionPolicy Bypass -File tools\build_apk.ps1
 
-将 SDK 路径写入 `local.properties`（该文件已加入 `.gitignore`，不会被提交）：
-
-```properties
-sdk.dir=C:\\Users\\YourName\\android-sdk
+# 方式二：手动
+$env:JAVA_HOME='D:\KQAssistant\env\jdk'
+$env:GRADLE_USER_HOME='D:\KQAssistant\env\gradle-home'
+.\gradlew.bat :app:assembleDebug :app:assembleRelease --no-daemon
 ```
 
-### 构建 Debug APK
+输出（文件名带版本号，不同测试版不会互相覆盖）：
 
-```bash
-./gradlew assembleDebug
+```
+app/build/outputs/apk/debug/KQAssistant-<版本>-debug.apk
+app/build/outputs/apk/release/KQAssistant-<版本>-release.apk
 ```
 
-输出：`app/build/outputs/apk/debug/app-debug.apk`
-
-### 构建 Release APK
-
-Release 构建已配置为复用 **debug keystore**，因此无需你提供签名文件即可直接安装测试。
-
-```bash
-./gradlew assembleRelease
-```
-
-输出：`app/build/outputs/apk/release/app-release.apk`
-
-### 安装
-
-```bash
-adb install -r app/build/outputs/apk/release/app-release.apk
-```
-
-或把 APK 复制到手机后通过文件管理器安装（需允许“安装未知应用”）。
+Release 复用 debug keystore，可直接安装测试。
 
 ---
 
 ## 使用说明
 
-### 首次启动
+### 镟轮数据使用流程
 
-1. 打开应用，授予 **位置** 与 **相机/存储** 权限。
-2. 应用会自动加载目标 HR 登录页。
-3. 页面右上角（或脚本注入的面板中）会出现“HR 助手”浮动控制面板。
+1. 启动页 →「镟轮数据」→「＋ 新建作业」→ 填线路（如 4）与车号（如 047048）；
+2. 进入作业 → 顶部 6 节页签 → 选一节，填日期/镟修人/复核人；
+3. 某轴点「上传照片」→ 弹窗选「拍照」或「从相册选择」；
+4. 进入**四角校正页**：拖动四个圆点贴合纸张边缘 →「确认校正」；
+5. 自动识别（主模型失败会换备选模型）→ 进入**编辑页**：上半屏看图片（点图切换原图/增强图），下半屏核对/修改数据 → 保存；
+6. 回到作业页，表格预览实时显示数值与计算结果；
+7. 全部完成后点「导出 Excel」→ 分享/另存为，得到可打印的 xlsx。
 
-### 模拟定位
+### 模型设置
 
-1. 在面板中输入目标经纬度（GCJ-02 火星坐标）。
-2. 点击“开启模拟定位”。
-3. 页面上的定位标记、打卡校验将使用你设定的坐标。
-4. 关闭模拟定位后，应用恢复使用真实 GPS。
+启动页右上角 ⚙：
 
-> **注意**：未输入有效坐标时，面板会阻止开启模拟定位，避免误定位到默认地址。
+1. 「＋ 添加服务商」→ 填名称（可选）、Base URL（OpenAI 兼容，如 `https://xxx/v1`）、API Key → 保存后自动拉取模型列表；
+2. 模型列表中点「＋ 添加」加入**可用模型**；
+3. 每个可用模型可单独设置**上下文长度**、**思考等级**，并单独「测试」；
+4. 镟轮数据 → 作业列表 →「模型」：选择**当前模型**与**备选模型**（主模型失败时回退）。
 
-### 相机与图片
+### 导出 Excel
 
-在 HR 页面点击拍照/相册时：
+- 使用内置空白模板（公式 G/L/N/O、合并单元格、边框样式保留）；
+- 6 个 sheet 按作业节命名，标题与页脚（镟修人/复核人/时间）自动写入；
+- B-A 方向的轴，导出时左右轮数据互换；
+- 未上传/未填写的轴保持空白。
 
-- 应用会拦截 KK SDK 的 `Was.exec('image', ...)`。
-- 调用系统相机或相册选择图片。
-- 如果已开启模拟定位，照片 EXIF 的 GPS 信息会写入你设定的坐标；否则不写入 GPS。
+---
 
-### 预设坐标
+## 数据存储
 
-- 可将常用坐标保存为预设，方便快速切换。
-- 长按预设项可删除。
+| 键 | 内容 |
+|----|------|
+| `xuanlun_data` | 作业列表、每节参数、每轴识别数据、图片路径 |
+| `xuanlun_models` | 服务商、模型库、当前/备选模型 |
+| `hrpunch_config` | 原有 HR 打卡配置（UA、预设坐标、autoexam 后端地址等） |
+
+图片保存在应用私有目录 `files/xuanlun/...`，卸载应用即清除。
+
+---
+
+## 版本与测试包
+
+- 正式功能版本：`1.4.0`（新增镟轮数据模块）。
+- 测试构建：`1.4.0-test001`、`test002` … 递增，`versionCode` 每次 +1；
+- APK 文件名带版本号，构建后同时复制到 `dist/`，不会互相覆盖；
+- 正式发布时去掉 `-testNNN` 后缀。
 
 ---
 
 ## 坐标系说明
 
-本应用涉及三种常见坐标系：
-
 | 坐标系 | 说明 | 使用方 |
 |--------|------|--------|
-| **WGS-84** | GPS 硬件与国际标准 | 应用内部存储的“真值” |
-| **GCJ-02** | 国测局加密坐标（火星坐标） | 高德地图、服务端 `attend.signin.geocheck`、`position.gcj.encryptwgs` |
-| **BD-09** | 百度二次加密坐标 | Landray/KK 原生定位 API `kk.location.getLocation()` |
+| **WGS-84** | GPS 硬件与国际标准 | 应用内部存储的"真值" |
+| **GCJ-02** | 国测局加密坐标（火星坐标） | 高德地图、服务端校验 |
+| **BD-09** | 百度二次加密坐标 | KK 原生定位 API |
 
-转换关系：
-
-```
-WGS-84 --(国家加密)--> GCJ-02 --(百度二次加密)--> BD-09
-```
-
-应用内部约定：
-
-- `__hr_real_coords_wgs`：真实 GPS（WGS-84）。
-- `__hr_fake_coords_wgs`：用户输入/地图选点转换后的 WGS-84。
-- `__hr_fake_coords_bd09` / `__hr_fake_coords_gcj`：分别给 KK SDK 和服务端使用的坐标。
-
-更详细的排查过程、根因分析与数据流图请参见 [`COORDINATE_SYSTEM_NOTES.md`](./COORDINATE_SYSTEM_NOTES.md)。
-
----
-
-## 核心实现
-
-### 1. `inject.js`
-
-- 在页面加载后向 `document.head` 注入 `<script>`，覆盖/增强 KK SDK。
-- 提供 `wgs84ToGcj02`、`gcj02ToBd09`、`wgs84ToBd09` 等坐标转换函数。
-- 重写 `Was.exec` / `Was.execA` / `Was.callbackResult`，使其返回 **BD-09**。
-- XHR 拦截器修正 `position.gcj.encryptwgs` 与 `attend.signin.geocheck` 的请求体为 **GCJ-02**，并重新计算校验 hash。
-- 提供浮动 UI 面板：坐标输入、模拟开关、预设管理、地图选点。
-
-### 2. `Js2JavaProxyBridge.kt`
-
-- 处理 SDK 的 `__js2java_proxy` 调用。
-- 模拟模式返回 `__hr_fake_coords_bd09`。
-- 真实模式将 `__hr_real_coords_wgs` 转换为 **BD-09** 返回。
-- 无有效坐标时返回错误，不再使用任何硬编码兜底坐标。
-
-### 3. `LocationHelper.kt`
-
-- 请求位置权限。
-- 通过 `LocationManager` 获取真实 GPS/WiFi 定位。
-- 每 5 秒刷新一次，写入 `window.__hr_real_coords_wgs`。
-
-### 4. `ImagePluginHandler.kt`
-
-- 处理 `Was.exec('image', ...)` 回调。
-- 启动系统相机或相册。
-- 对图片进行缩放、旋转校正。
-- 从 WebView 异步读取 `__hr_fake_coords_wgs`，写入 JPEG EXIF GPS。
+内部约定：`__hr_real_coords_wgs`（真实）、`__hr_fake_coords_wgs`（模拟）、`__hr_fake_coords_bd09/gcj`（分发）。
+详细排查见 [`COORDINATE_SYSTEM_NOTES.md`](./COORDINATE_SYSTEM_NOTES.md)。
 
 ---
 
 ## 已知限制
 
-- 当前仅针对 `https://hr-mobile.hncsmtr.com:7443` 这个特定站点做了适配。
-- Release APK 使用 debug keystore 签名，**仅适合内部测试**，不能上传到 Google Play 等应用商店。
-- 部分企业版 Landray/KK 可能有额外的风控或签名校验，超出本工具处理范围。
-- Android 10+ 对后台定位、相册读取有更严格限制，建议授予必要权限。
-
----
-
-## 排错记录
-
-主要问题与修复已整理在 [`COORDINATE_SYSTEM_NOTES.md`](./COORDINATE_SYSTEM_NOTES.md)，包括：
-
-- 相机/图片无法点击（`_hr_isLocationPlugin` 缺失）。
-- 页面定位偏移约 1.2 km（KK SDK 期望 BD-09，之前返回 GCJ-02）。
-- `position.gcj.encryptwgs` 500 错误（请求体坐标无效/坐标系错误）。
-- 硬编码默认坐标移除过程。
+- 识别依赖多模态模型能力，票据模糊/反光时可能识别错误，**必须人工核对后再导出**；
+- 不同网关对 `reasoning_effort` 等参数支持不一，失败时应用会自动去掉该参数重试；
+- 镟轮模板为旧版 `.xls` 转换的 `.xlsx`（`assets/xuanlun/template.xlsx`），如模板改版需同步替换；
+- ExcelJS 在 WebView 内导出大文件时耗时数秒，属正常现象。
 
 ---
 
 ## 贡献与许可
 
-本项目为个人/内部学习与研究用途。
-
-- 欢迎提交 Issue 或 PR 改进坐标转换精度、适配更多站点、优化 UI。
-- 请勿将本工具用于未经授权的考勤作弊或其他违法行为。
-- 代码按原样提供，不提供任何明示或暗示的担保。
-
----
-
-## 常见问题
-
-**Q：App 连公网后端（如 www.ep2w.fun）时面板提示"后端未连接"？**
-油猴的 `@connect` 只对油猴有效，App 内的 `fetch()` 受浏览器 CORS 约束。从 1.3.6 起，App 已内置
-**原生网络桥**（`HRBridge.nativeApi`）：用 Android 原生发请求、绕过浏览器 CORS，因此
-**连 `https://www.ep2w.fun`（或 `http://` 自动跳转）无需再给服务器配 CORS**，
-面板"后端"填 `https://www.ep2w.fun` 点「自检」应显示"后端已连接"。
-
-> 若仍连不上，用 Chrome 的 chrome://inspect 看日志；确认密钥与后端 config.json 一致
-> （401 会在面板提示"后端要密钥"）。油猴版则仍需 `@connect` 或服务器 CORS，两者互不影响。
-
-**Q：为什么每次退出 App 都要重新登录？不是有 Cookie 吗？**
-两套系统共用同一套 SSO 登录 Cookie，App 已默认持久化并强制写盘
-（进入后台/退出时 `CookieManager.flush()`，避免杀进程丢登录态）。
-但仍要重登，通常是**服务端 SSO 会话超时**（会话 ID 过期，服务器判定失效）导致的——
-这由服务器决定，App 无法绕过。建议：不要频繁在最近任务栏把 App 滑掉，避免会话被中断。
-
-**Q：Debug 和 Release 有什么区别？Debug 怎么用？**
-两者功能完全一致，均未混淆、签名均为 debug keystore（仅供自测，不能上架）。
-Debug 提供调试能力：
-- Chrome 远程调试：手机开 USB 调试连 PC，PC Chrome 打开 `chrome://inspect`
-  即可实时查看 WebView 的 DOM/控制台/网络（排查注入脚本是否生效最方便）。
-- `adb logcat` 查看 App 日志。
-注意两个包 `applicationId` 相同，不能同时安装，装一个会覆盖另一个；日常使用推荐 Release。
-
----
-
-## 版本
-
-当前版本：**1.3.0**（versionCode 9）
-
-> **版本策略**：日常小修复只递增最后一位小版本号（1.3.1、1.3.2、…、1.3.10、1.3.11…），
-> 仅重大功能更新才升 1.4 及以上。
-
-### 1.3.0 更新内容（自 1.2.11 起的累计更新，本版统一发布）
-
-#### 🆕 新增功能
-- **本地引导页**：首次打开进入 `assets/launcher.html`，两个按钮「人力资源 / 员工培训」选择入口，
-  替代原顶部菜单；无标题栏、网页铺满屏幕，白底简约、中央为 App 图标。
-- **双门户合一**：同一个 WebView、同一套 SSO Cookie 承载两个系统——
-  「人力资源」（`hr-mobile.hncsmtr.com:7443`）与「员工培训」（`hrt-mobile.hncsmtr.com:8085`）；
-  员工培训通过 `/mobile/ssoLogin` 走 SSO 登录，登录一次两个系统通用。
-- **原生网络桥 `HRBridge.nativeApi`**：App 内改用 Android 原生发 HTTP 请求，绕过浏览器 CORS，
-  可直接连接公网后端（如 `https://www.ep2w.fun`），无需给服务器配置 CORS。
-
-#### 🛠 Bug 修复
-- **多选题点不中**：改为逐项点击 + 等待 Vue 刷新 + 未选中再用最新节点点一次的兜底策略，
-  修复"日志显示点击 N 项、页面却没选中"。
-- **匹配归一化**：新增数字/百分比（`5%` ↔ `0.05`）与日期（Excel 序列 `45605` ↔ `2024年11月9日`）
-  等价键，解决"页面和题库同义不同写法"导致的匹配失败。
-- **后端地址回退 `127.0.0.1`**：面板保存的地址在页面重载后不再写回配置的 bug——
-  现在加载即写回，并用 App 原生存储持久化（不再受 http/https 不同源影响）。
-- **输入框退格删不掉**：移除"输入即保存、每次按键重写输入框"逻辑，改为失焦/回车提交。
-- **面板手机适配**：显式配色 + 宽度自适应（`min(310px, calc(100vw - 16px))`）、
-  关闭 WebView 算法深色模式，修复按钮过大、白字看不清。
-- **登录态（Cookie）**：显式开启 Cookie 接受，并在进入后台/退出时强制 `flush()` 写盘，
-  减少"重开 App 要重新登录"的情况。
-
-#### 📦 脚本与依赖
-- autoexam 注入脚本升级至 **1.6.3**（API 密钥支持、油猴 `@connect` 放行、匹配/点击健壮性）。
-- 保留两份独立 JS（`inject.js` / `autoexam.js`），按页面 host 分流注入，互不合并、互不干扰。
-- 构建环境封装到 `build.bat`（自带 JDK/代理/自包含 Gradle 缓存），`env/` 不入库。
-
-### 1.2.11 及更早的历史变更
-
-- 模拟定位（预设/手动坐标）使用时加入约 10 米半径的随机偏移，避免每次打卡经纬度完全一致。
-- 移除 `attend.signin.create` 的 XHR 拦截，恢复旧版 debug 的成功模式。
-- `position.gcj.encryptwgs` 仍修正为 GCJ-02，`attend.signin.geocheck` 仍修正为 GCJ-02。
-- 移除所有硬编码默认坐标，未选点时不再 fallback 到任何固定地址。
-- 模拟定位开启前强制校验坐标有效性。
-- 图片 EXIF GPS 改为从 WebView 动态读取用户所选坐标。
+- 仅限内部使用；二次分发请保留声明并遵守所在单位制度。
+- 题库与业务数据不随仓库分发。

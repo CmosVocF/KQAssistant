@@ -15,6 +15,10 @@
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
         <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+            <data android:mimeType="image/*" />
+        </intent>
+        <intent>
             <action android:name="android.intent.action.OPEN_DOCUMENT" />
             <data android:mimeType="image/*" />
         </intent>
@@ -39,6 +43,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".XuanlunCropActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

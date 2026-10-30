@@ -2,4 +2,5 @@
 <paths>
     <cache-path name="cache_pictures" path="pictures/" />
     <files-path name="files_pictures" path="pictures/" />
+    <cache-path name="xuanlun_export" path="xuanlun_export/" />
 </paths>

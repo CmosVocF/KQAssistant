@@ -35,6 +35,7 @@ Thumbs.db
 *.apk
 *.ap_
 *.aab
+dist/
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild
@@ -49,6 +50,9 @@ __pycache__/
 
 # 测试/敏感产物目录（不纳入仓库）
 _deploytest/
+
+# 用户提供的镟轮样例数据（含真实照片/姓名，不入库）
+xuanlunshuju/
 
 # Temporary files
 *.tmp

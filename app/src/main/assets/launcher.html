@@ -48,10 +48,20 @@
   .card .desc { font-size: 12px; color: #8b949e; margin-top: 3px; }
   .card .arrow { margin-left: auto; color: #b6bdc7; font-size: 20px; }
 
+  .gear {
+    position: fixed; top: calc(14px + env(safe-area-inset-top)); right: 14px;
+    width: 40px; height: 40px; border-radius: 12px; border: 1px solid #e5e8ec;
+    background: rgba(255,255,255,.92); color: #555; font-size: 20px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    -webkit-appearance: none; appearance: none; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  .gear:active { background: #eef1f5; }
+
   .footer { position: fixed; bottom: 16px; font-size: 11px; color: #c6ccd4; }
 </style>
 </head>
 <body>
+  <button class="gear" type="button" title="模型设置" onclick="HRBridge.openSite('xuanlun-settings')">⚙</button>
   <div class="logo">
     <svg viewBox="0 0 108 108" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="App 图标">
       <rect width="108" height="108" fill="#4A6CF7"/>
@@ -77,6 +87,13 @@
       <div>
         <div class="name">员工培训</div>
         <div class="desc">在线考试 · 自动答题</div>
+      </div>
+      <span class="arrow">›</span>
+    </button>
+    <button class="card" type="button" onclick="HRBridge.openSite('xuanlun')">
+      <div>
+        <div class="name">镟轮数据</div>
+        <div class="desc">拍照识数 · 自动填表</div>
       </div>
       <span class="arrow">›</span>
     </button>

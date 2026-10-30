@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>镟轮数据 · 作业详情</title>
+<link rel="stylesheet" href="xuanlun.css">
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" id="btnBack" title="返回作业列表">‹</button>
+    <div class="title small" id="barTitle">作业详情</div>
+    <div style="width:36px"></div>
+  </div>
+
+  <main>
+    <div class="job-head">
+      <div class="info">
+        <div class="job-title" id="jobTitle"></div>
+        <div class="job-sub" id="jobSub"></div>
+      </div>
+      <button class="primary small" id="btnExport">导出 Excel</button>
+      <button class="danger small" id="btnDelJob">删除作业</button>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+
+    <!-- 1) 预览 -->
+    <div class="panel">
+      <div class="sec-title">表格预览（最终样式，暂无数据处为空白）</div>
+      <div id="preview"></div>
+    </div>
+
+    <!-- 2) 镟修数据（每轴上传） -->
+    <div class="panel">
+      <div class="sec-title">镟修数据 · <span id="secName"></span></div>
+      <div class="axles" id="axles"></div>
+    </div>
+
+    <!-- 3) 页面设置（本节） -->
+    <div class="panel">
+      <div class="sec-title">页面设置（本节）</div>
+      <div class="fields" id="fields"></div>
+    </div>
+
+    <div class="hint">每节数据独立保存；方向 A-B / B-A 可按轴单独切换（B-A 时该轴左右轮数据在填表时互换）。</div>
+  </main>
+
+  <div class="busy hidden" id="busy">
+    <div class="busy-box">
+      <div class="spin"></div>
+      <div id="busyText">处理中…</div>
+    </div>
+  </div>
+
+<script src="xuanlun-common.js"></script>
+<script>
+(function () {
+  'use strict';
+  var data = XL.load();
+  var jobId = decodeURIComponent((location.hash || '').replace(/^#/, ''));
+  var job = XL.getJob(data, jobId);
+  if (!job) {
+    alert('未找到该作业，返回作业列表');
+    location.replace('xuanlun.html');
+    return;
+  }
+  XL.ensureJob(job);
+  var activeSec = 0;
+
+  function num(v) { if (v === null || v === undefined || v === '') return null; var n = parseFloat(v); return isFinite(n) ? n : null; }
+  function fmt(v) { if (v === null || v === undefined) return ''; return String(v); }
+  function fmtDate(v) {
+    if (!v) return '';
+    var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return String(v);
+    return m[1] + '年' + parseInt(m[2], 10) + '月' + parseInt(m[3], 10) + '日';
+  }
+  function absDiff(a, b) { var x = num(a), y = num(b); if (x === null || y === null) return ''; return String(Math.abs(x - y)); }
+  function maxMin(vals) {
+    var ns = vals.map(num).filter(function (v) { return v !== null; });
+    if (ns.length < 2) return '';
+    return String(Math.max.apply(null, ns) - Math.min.apply(null, ns));
+  }
+
+  function buildPreview(sec) {
+    var sh = job.sheets[sec];
+    var line = job.line;
+    var html = [];
+    html.push('<div class="preview-wrap"><table class="preview-tbl">');
+    html.push('<thead>');
+    html.push('<tr><th colspan="15" class="title">附表2：《' + line + '号线' + sec + '车轮对镟修尺寸统计表》</th></tr>');
+    html.push('<tr><th rowspan="2" colspan="3">位置</th><th colspan="5">车轮镟修前测量尺寸</th><th colspan="5">车轮镟修后测量尺寸</th><th rowspan="2">轮径切削量</th><th rowspan="2" style="width:48px">一转轮径最大差值</th></tr>');
+    html.push('<tr><th>轮缘高度</th><th>轮缘厚度</th><th>直径</th><th>轮经差</th><th>径向跳动量</th><th>轮缘高度</th><th>轮缘厚度</th><th>直径</th><th>轮经差</th><th>径向跳动量</th></tr>');
+    html.push('</thead><tbody>');
+
+    function rowCells(n, side) {
+      var aid = sec + '-' + n;
+      var ax = sh.axles[aid] || {};
+      var dd = ax.data || {};
+      var before = dd.before || {}, after = dd.after || {};
+      var isBA = (ax.dir === 'B-A');
+      var b = isBA ? (side === 'L' ? before.right : before.left) : (side === 'L' ? before.left : before.right);
+      var a = isBA ? (side === 'L' ? after.right : after.left) : (side === 'L' ? after.left : after.right);
+      return { b: b || {}, a: a || {} };
+    }
+    var d = [rowCells(1, 'L'), rowCells(1, 'R'), rowCells(2, 'L'), rowCells(2, 'R'), rowCells(3, 'L'), rowCells(3, 'R'), rowCells(4, 'L'), rowCells(4, 'R')];
+    function td(v) { return '<td>' + fmt(v) + '</td>'; }
+    function g(i) { return absDiff(d[i * 2].b.dia, d[i * 2 + 1].b.dia); }
+    function l(i) { return absDiff(d[i * 2].a.dia, d[i * 2 + 1].a.dia); }
+    function nCut(i) { var x = num(d[i].b.dia), y = num(d[i].a.dia); return (x !== null && y !== null) ? String(x - y) : ''; }
+    var o1 = maxMin([d[0].a.dia, d[1].a.dia, d[2].a.dia, d[3].a.dia]);
+    var o2 = maxMin([d[4].a.dia, d[5].a.dia, d[6].a.dia, d[7].a.dia]);
+    var oAll = maxMin(d.map(function (x) { return x.a.dia; }));
+
+    html.push('<tr><th rowspan="4" class="vert">一位端转向架</th><th rowspan="2">一轴</th><th>左轮</th>'
+      + td(d[0].b.lh) + td(d[0].b.le) + td(d[0].b.dia) + '<td rowspan="2">' + g(0) + '</td>' + td(d[0].b.rt)
+      + td(d[0].a.lh) + td(d[0].a.le) + td(d[0].a.dia) + '<td rowspan="2">' + l(0) + '</td>' + td(d[0].a.rt)
+      + td(nCut(0)) + '<td>' + o1 + '</td></tr>');
+    html.push('<tr><th>右轮</th>'
+      + td(d[1].b.lh) + td(d[1].b.le) + td(d[1].b.dia) + td(d[1].b.rt)
+      + td(d[1].a.lh) + td(d[1].a.le) + td(d[1].a.dia) + td(d[1].a.rt)
+      + td(nCut(1)) + '<td rowspan="2">二转轮径最大差值</td></tr>');
+    html.push('<tr><th rowspan="2">二轴</th><th>左轮</th>'
+      + td(d[2].b.lh) + td(d[2].b.le) + td(d[2].b.dia) + '<td rowspan="2">' + g(1) + '</td>' + td(d[2].b.rt)
+      + td(d[2].a.lh) + td(d[2].a.le) + td(d[2].a.dia) + '<td rowspan="2">' + l(1) + '</td>' + td(d[2].a.rt)
+      + td(nCut(2)) + '</tr>');
+    html.push('<tr><th>右轮</th>'
+      + td(d[3].b.lh) + td(d[3].b.le) + td(d[3].b.dia) + td(d[3].b.rt)
+      + td(d[3].a.lh) + td(d[3].a.le) + td(d[3].a.dia) + td(d[3].a.rt)
+      + td(nCut(3)) + '<td>' + o2 + '</td></tr>');
+    html.push('<tr><th rowspan="4" class="vert">二位端转向架</th><th rowspan="2">三轴</th><th>左轮</th>'
+      + td(d[4].b.lh) + td(d[4].b.le) + td(d[4].b.dia) + '<td rowspan="2">' + g(2) + '</td>' + td(d[4].b.rt)
+      + td(d[4].a.lh) + td(d[4].a.le) + td(d[4].a.dia) + '<td rowspan="2">' + l(2) + '</td>' + td(d[4].a.rt)
+      + td(nCut(4)) + '<td rowspan="2">整节车轮径最大差值</td></tr>');
+    html.push('<tr><th>右轮</th>'
+      + td(d[5].b.lh) + td(d[5].b.le) + td(d[5].b.dia) + td(d[5].b.rt)
+      + td(d[5].a.lh) + td(d[5].a.le) + td(d[5].a.dia) + td(d[5].a.rt)
+      + td(nCut(5)) + '</tr>');
+    html.push('<tr><th rowspan="2">四轴</th><th>左轮</th>'
+      + td(d[6].b.lh) + td(d[6].b.le) + td(d[6].b.dia) + '<td rowspan="2">' + g(3) + '</td>' + td(d[6].b.rt)
+      + td(d[6].a.lh) + td(d[6].a.le) + td(d[6].a.dia) + '<td rowspan="2">' + l(3) + '</td>' + td(d[6].a.rt)
+      + td(nCut(6)) + '<td rowspan="2">' + oAll + '</td></tr>');
+    html.push('<tr><th>右轮</th>'
+      + td(d[7].b.lh) + td(d[7].b.le) + td(d[7].b.dia) + td(d[7].b.rt)
+      + td(d[7].a.lh) + td(d[7].a.le) + td(d[7].a.dia) + td(d[7].a.rt)
+      + td(nCut(7)) + '</tr>');
+    html.push('</tbody>');
+    html.push('<tfoot><tr><td colspan="15" class="note">备注:1、如轮对无镟修后数据则用斜线标注。2、记录表格可用电子记录打印，签名必须手写签名。</td></tr>');
+    html.push('<tr><td colspan="15" class="foot">  镟修人：' + fmt(sh.maker) + '　　　　　　　　　　　复核人：' + fmt(sh.checker) + '　　　　　　时间：' + fmtDate(sh.date || sh.time) + '</td></tr></tfoot>');
+    html.push('</table></div>');
+    return html.join('');
+  }
+
+  var previewEl = document.getElementById('preview');
+  var axlesEl = document.getElementById('axles');
+  var fieldsEl = document.getElementById('fields');
+  var secNameEl = document.getElementById('secName');
+
+  function refreshPreview() {
+    previewEl.innerHTML = buildPreview(job.sections[activeSec]);
+  }
+
+  function render() {
+    document.getElementById('jobTitle').textContent = job.line + '号线 · ' + job.car + '车';
+    var p = XL.progress(job);
+    document.getElementById('jobSub').textContent = '6 节 · 24 轴 · 已上传 ' + p.filled + '/' + p.total;
+
+    var tabs = document.getElementById('tabs');
+    tabs.innerHTML = '';
+    job.sections.forEach(function (sec, i) {
+      var b = document.createElement('button');
+      b.className = 'tab' + (i === activeSec ? ' active' : '');
+      b.textContent = sec;
+      b.onclick = function () { activeSec = i; render(); };
+      tabs.appendChild(b);
+    });
+
+    var sec = job.sections[activeSec];
+    var sh = job.sheets[sec];
+    secNameEl.textContent = sec;
+
+    // 页面设置（每节）
+    fieldsEl.innerHTML = '';
+    function field(labelText, inputEl, span2) {
+      var wrap = document.createElement('div'); wrap.className = 'field' + (span2 ? ' span2' : '');
+      var lab = document.createElement('label'); lab.textContent = labelText;
+      wrap.appendChild(lab); wrap.appendChild(inputEl);
+      fieldsEl.appendChild(wrap);
+    }
+    var inDate = document.createElement('input');
+    inDate.type = 'date';
+    inDate.value = sh.date || '';
+    inDate.onchange = function () { sh.date = inDate.value; XL.save(data); refreshPreview(); };
+    var inMaker = document.createElement('input');
+    inMaker.value = sh.maker || ''; inMaker.placeholder = '镟修人（可留空）';
+    inMaker.onchange = function () { sh.maker = inMaker.value; XL.save(data); refreshPreview(); };
+    var inChecker = document.createElement('input');
+    inChecker.value = sh.checker || ''; inChecker.placeholder = '复核人（可留空）';
+    inChecker.onchange = function () { sh.checker = inChecker.value; XL.save(data); refreshPreview(); };
+
+    field('日期', inDate, true);
+    field('镟修人', inMaker);
+    field('复核人', inChecker);
+
+    // 镟修数据（每轴：编辑 + 上传照片）
+    axlesEl.innerHTML = '';
+    for (var n = 1; n <= 4; n++) {
+      (function (n) {
+        var aid = sec + '-' + n;
+        var ax = sh.axles[aid] || (sh.axles[aid] = { dir: 'A-B', data: null });
+        var row = document.createElement('div'); row.className = 'axle';
+        var an = document.createElement('div'); an.className = 'an'; an.textContent = aid;
+        var actions = document.createElement('div'); actions.className = 'axle-actions';
+        var bEdit = document.createElement('button'); bEdit.className = 'ghost small'; bEdit.textContent = '编辑';
+        bEdit.onclick = function () {
+          location.href = 'xuanlun-edit.html#' + encodeURIComponent(jobId + '|' + sec + '|' + aid);
+        };
+        var bPhoto = document.createElement('button');
+        bPhoto.className = 'upload-btn';
+        bPhoto.textContent = ax.data ? '重新上传' : '上传照片';
+        bPhoto.onclick = function () { beginPick(aid); };
+        actions.appendChild(bEdit); actions.appendChild(bPhoto);
+        var st = document.createElement('div'); st.className = 'st';
+        st.textContent = ax.data ? '已填数据' : '未填写';
+        row.appendChild(an); row.appendChild(actions); row.appendChild(st);
+        axlesEl.appendChild(row);
+      })(n);
+    }
+
+    refreshPreview();
+  }
+
+  // 拍照/相册：直接调起系统选择器（相机 + 相册），不再弹自定义菜单
+  function beginPick(aid) {
+    var secId = job.sections[activeSec];
+    var shNow = job.sheets[secId];
+    var axNow = shNow && shNow.axles[aid];
+    if (axNow && axNow.data) {
+      if (!confirm('该轴已填写过数据，重新上传将覆盖原数据，是否继续？')) return;
+    }
+    if (window.HRBridge && HRBridge.xuanlunPickImage) {
+      HRBridge.xuanlunPickImage(JSON.stringify({ jobId: jobId, section: secId, axle: aid }));
+    } else {
+      alert('当前环境不支持拍照/相册。');
+    }
+  }
+
+  // 原生拍照/相册返回后：保存图片路径 → 自动识别 → 进编辑页核对
+  var lastPick = null;
+  function showBusy(text) {
+    document.getElementById('busyText').textContent = text || '处理中…';
+    document.getElementById('busy').classList.remove('hidden');
+  }
+  function hideBusy() { document.getElementById('busy').classList.add('hidden'); }
+
+  window.__xuanlunImagePicked = function (obj) {
+    try {
+      if (!obj || !obj.ok) { alert('照片获取失败：' + ((obj && obj.error) || '未知错误')); return; }
+      var req = obj.request || {};
+      var d2 = XL.load();
+      var j2 = XL.getJob(d2, req.jobId || jobId);
+      if (!j2) { alert('作业不存在'); return; }
+      XL.ensureJob(j2);
+      var secId = req.section || job.sections[activeSec];
+      var sh2 = j2.sheets[secId];
+      if (!sh2) { alert('未找到该节'); return; }
+      var ax2 = sh2.axles[req.axle] || (sh2.axles[req.axle] = { dir: 'A-B', data: null });
+      ax2.imagePath = obj.path;
+      ax2.origPath = obj.origPath || '';
+      XL.save(d2);
+      data = d2; job = j2;
+      lastPick = { jobId: j2.id, section: secId, axle: req.axle };
+      if (window.HRBridge && HRBridge.xuanlunRecognize) {
+        showBusy('正在识别 ' + req.axle + ' …\n（主模型失败会自动尝试备选模型，请稍候）');
+        HRBridge.xuanlunRecognize(JSON.stringify({ jobId: j2.id, section: secId, axle: req.axle, imagePath: obj.path }));
+      } else {
+        openEdit(lastPick);
+      }
+    } catch (e) {
+      alert('处理失败：' + (e && e.message ? e.message : e));
+    }
+  };
+
+  function openEdit(p) {
+    if (!p) return;
+    location.href = 'xuanlun-edit.html#' + encodeURIComponent(p.jobId + '|' + p.section + '|' + p.axle);
+  }
+
+  function s(v) { return (v === null || v === undefined) ? '' : String(v); }
+  function normWheel(w) {
+    w = w || {};
+    return { lh: s(w['轮缘高度']), le: s(w['轮缘厚度']), dia: s(w['直径']), rt: s(w['径向跳动量']) };
+  }
+
+  window.__xuanlunRecognized = function (obj) {
+    hideBusy();
+    if (!obj || !obj.ok) {
+      alert('识别失败：' + ((obj && obj.error) || '未知错误') + '\n将打开编辑页，可手动核对/填写。');
+      openEdit(lastPick);
+      return;
+    }
+    try {
+      var p = lastPick || { jobId: obj.jobId, section: obj.section, axle: obj.axle };
+      var d2 = XL.load();
+      var j2 = XL.getJob(d2, p.jobId);
+      if (!j2) { alert('作业不存在'); return; }
+      XL.ensureJob(j2);
+      var sh2 = j2.sheets[p.section];
+      if (!sh2) { alert('未找到该节'); return; }
+      var ax2 = sh2.axles[p.axle] || (sh2.axles[p.axle] = { dir: 'A-B', data: null });
+      var r = obj.data || {};
+      var before = r['加工前'] || {}, after = r['加工后'] || {};
+      ax2.data = {
+        axleId: s(r['轮对ID']), carId: s(r['车辆ID']), date: s(r['加工日期']),
+        before: { left: normWheel(before['左轮']), right: normWheel(before['右轮']) },
+        after: { left: normWheel(after['左轮']), right: normWheel(after['右轮']) }
+      };
+      ax2.dir = (s(r['车辆方向']) === '1') ? 'B-A' : 'A-B';
+      XL.save(d2);
+      data = d2; job = j2;
+
+      var msgs = [];
+      if (ax2.data.axleId && ax2.data.axleId !== p.axle) msgs.push('识别轮对ID（' + ax2.data.axleId + '）与当前轴位（' + p.axle + '）不一致');
+      if (ax2.data.carId && ax2.data.carId !== j2.car) msgs.push('识别车辆ID（' + ax2.data.carId + '）与当前作业车号（' + j2.car + '）不一致');
+      if (msgs.length) alert('请注意核对照片是否放错位置：\n' + msgs.join('\n'));
+
+      openEdit(p);
+    } catch (e) {
+      alert('处理识别结果失败：' + (e && e.message ? e.message : e));
+      openEdit(lastPick);
+    }
+  };
+
+  document.getElementById('btnBack').onclick = function () {
+    if (history.length > 1) history.back();
+    else location.href = 'xuanlun.html';
+  };
+  document.getElementById('btnDelJob').onclick = function () {
+    if (!confirm('删除作业「' + job.line + '号线 ' + job.car + '车」及其本机数据吗？')) return;
+    data.jobs = data.jobs.filter(function (j) { return j.id !== jobId; });
+    XL.save(data);
+    location.replace('xuanlun.html');
+  };
+
+  // ---------------- 导出 Excel（保留原模板公式与格式） ----------------
+  function fmtZh(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return iso || '';
+    return m[1] + '年' + parseInt(m[2], 10) + '月' + parseInt(m[3], 10) + '日';
+  }
+  function b64ToBuf(b64) {
+    var bin = atob(b64);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr.buffer;
+  }
+  function bufToB64(buf) {
+    var bytes = new Uint8Array(buf);
+    var s = '';
+    for (var i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    return btoa(s);
+  }
+  function setNumCell(ws, addr, v) {
+    if (v === null || v === undefined || String(v).trim() === '') return;
+    var n = parseFloat(v);
+    if (isFinite(n)) ws.getCell(addr).value = n;
+  }
+  function fillWorkbook(wb) {
+    for (var i = 0; i < job.sections.length && i < wb.worksheets.length; i++) {
+      var sec = job.sections[i];
+      var ws = wb.worksheets[i];
+      try { ws.name = sec; } catch (e) { /* ignore */ }
+      var sh = job.sheets[sec] || {};
+      ws.getCell('A1').value = '附表2：《' + job.line + '号线' + sec + '车轮对镟修尺寸统计表》';
+      ws.getCell('A13').value = '  镟修人: ' + (sh.maker || '') +
+        '                            复核人: ' + (sh.checker || '') +
+        '                   时间:   ' + fmtZh(sh.date || '');
+      for (var n = 1; n <= 4; n++) {
+        var ax = (sh.axles || {})[sec + '-' + n];
+        if (!ax || !ax.data) continue;
+        var before = ax.data.before || {}, after = ax.data.after || {};
+        var isBA = ax.dir === 'B-A';
+        var bl = isBA ? before.right : before.left, br = isBA ? before.left : before.right;
+        var al = isBA ? after.right : after.left, ar = isBA ? after.left : after.right;
+        bl = bl || {}; br = br || {}; al = al || {}; ar = ar || {};
+        var rl = 4 + (n - 1) * 2, rr = rl + 1;
+        setNumCell(ws, 'D' + rl, bl.lh); setNumCell(ws, 'E' + rl, bl.le); setNumCell(ws, 'F' + rl, bl.dia); setNumCell(ws, 'H' + rl, bl.rt);
+        setNumCell(ws, 'D' + rr, br.lh); setNumCell(ws, 'E' + rr, br.le); setNumCell(ws, 'F' + rr, br.dia); setNumCell(ws, 'H' + rr, br.rt);
+        setNumCell(ws, 'I' + rl, al.lh); setNumCell(ws, 'J' + rl, al.le); setNumCell(ws, 'K' + rl, al.dia); setNumCell(ws, 'M' + rl, al.rt);
+        setNumCell(ws, 'I' + rr, ar.lh); setNumCell(ws, 'J' + rr, ar.le); setNumCell(ws, 'K' + rr, ar.dia); setNumCell(ws, 'M' + rr, ar.rt);
+      }
+    }
+  }
+  function exportName() {
+    var d = '';
+    for (var i = 0; i < job.sections.length; i++) {
+      var sh = job.sheets[job.sections[i]];
+      if (sh && sh.date) { d = fmtZh(sh.date); break; }
+    }
+    if (!d) { var t = new Date(); d = t.getFullYear() + '年' + (t.getMonth() + 1) + '月' + t.getDate() + '日'; }
+    return String(parseInt(job.line, 10)) + '号线轮对数据尺寸统计表' + job.car + '车' + d + '.xlsx';
+  }
+  function withExcelJs(cb) {
+    if (window.ExcelJS) { cb(); return; }
+    var s = document.createElement('script');
+    s.src = 'exceljs.min.js';
+    s.onload = function () { cb(); };
+    s.onerror = function () { hideBusy(); alert('ExcelJS 加载失败，无法导出'); };
+    document.head.appendChild(s);
+  }
+  document.getElementById('btnExport').onclick = function () {
+    showBusy('正在生成 Excel（保留公式与格式）…');
+    withExcelJs(function () {
+      try {
+        var tpl = HRBridge.xuanlunTemplate();
+        if (!tpl) { hideBusy(); alert('模板读取失败'); return; }
+        var wb = new ExcelJS.Workbook();
+        wb.xlsx.load(b64ToBuf(tpl)).then(function () {
+          fillWorkbook(wb);
+          return wb.xlsx.writeBuffer();
+        }).then(function (buf) {
+          var r = JSON.parse(HRBridge.xuanlunSaveXlsx(bufToB64(buf), exportName()));
+          hideBusy();
+          if (!r.ok) { alert('保存失败：' + (r.error || '')); return; }
+          var s = JSON.parse(HRBridge.xuanlunShareFile(r.path));
+          if (!s.ok) alert('已生成：' + r.path + '\n分享失败：' + (s.error || ''));
+        }).catch(function (e) {
+          hideBusy();
+          alert('导出失败：' + (e && e.message ? e.message : e));
+        });
+      } catch (e) {
+        hideBusy();
+        alert('导出异常：' + (e && e.message ? e.message : e));
+      }
+    });
+  };
+
+  render();
+
+  // 从编辑页返回时重新加载数据并刷新
+  window.addEventListener('pageshow', function () {
+    data = XL.load();
+    var j2 = XL.getJob(data, jobId);
+    if (j2) { job = XL.ensureJob(j2); render(); }
+  });
+})();
+</script>
+</body>
+</html>

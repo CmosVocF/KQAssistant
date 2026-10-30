@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
@@ -11,13 +11,13 @@ android {
         applicationId = "com.hrpunch"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.3.0"
+        versionCode = 23
+        versionName = "1.4.0-test013"
     }
 
     signingConfigs {
         getByName("debug") {
-            // 使用默认 debug keystore，release 复用它以便直接安装测试
+            // 浣跨敤榛樿 debug keystore锛況elease 澶嶇敤瀹冿紝鏂逛究鐩存帴瀹夎娴嬭瘯
         }
     }
 
@@ -39,6 +39,16 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    // 姣忎釜鐗堟湰鐨?APK 鏂囦欢鍚嶅甫鐗堟湰鍙凤紝閬垮厤涓嶅悓娴嬭瘯鐗堜簰鐩歌鐩?
+    applicationVariants.all {
+        val vn = versionName ?: ""
+        val vName = name
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "KQAssistant-$vn-$vName.apk"
+        }
     }
 }
 

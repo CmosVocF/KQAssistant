@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>模型选择</title>
+<link rel="stylesheet" href="xuanlun.css">
+<style>
+  .card { background: #fff; border: 1px solid #e5e8ec; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .card h3 { font-size: 15px; margin-bottom: 10px; }
+  .pick { display: flex; align-items: flex-start; gap: 10px; border: 1px solid #eef0f3; border-radius: 10px; padding: 10px; margin-bottom: 8px; background: #fafbfc; }
+  .pick input[type=radio] { margin-top: 3px; width: 18px; height: 18px; }
+  .pick .info { flex: 1; }
+  .pick .name { font-size: 13.5px; font-weight: 600; word-break: break-all; }
+  .pick .meta { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  .empty { font-size: 12px; color: #8b949e; padding: 6px 2px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+  .status { font-size: 12px; margin-top: 8px; }
+  .status.ok { color: #1a7f37; }
+  .status.bad { color: #c0392b; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" id="btnBack" title="返回作业列表">‹</button>
+    <div class="title">模型选择</div>
+    <div style="width:36px"></div>
+  </div>
+
+  <main>
+    <div class="card">
+      <h3>当前模型（识别时使用）</h3>
+      <div id="currentList"></div>
+    </div>
+
+    <div class="card">
+      <h3>备选模型（当前模型失败时回退）</h3>
+      <select id="fallbackSel" style="width:100%;border:1px solid #d0d7de;border-radius:8px;padding:10px;font-size:14px;background:#fff"></select>
+      <div class="hint" style="margin-top:8px">不选择备选模型时：主模型失败直接提示错误。</div>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="btnSave" style="flex:1">保存</button>
+      <button class="ghost" id="btnManage" style="flex:1">管理服务商/模型库</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="hint">模型库在启动页 ⚙ → 模型设置 中添加：先加服务商（URL + Key），刷新模型后点「＋ 添加」加入模型库。</div>
+  </main>
+
+<script src="xuanlun-common.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cfg = XL.loadModels();
+  var sel = null; // 本次页面选择的当前模型 id
+
+  function render() {
+    sel = cfg.current || null;
+    var box = document.getElementById('currentList');
+    box.innerHTML = '';
+    if (!cfg.library.length) {
+      box.innerHTML = '<div class="empty">模型库为空，请先到「模型设置」添加服务商与模型。</div>';
+    }
+    cfg.library.forEach(function (l) {
+      var p = XL.findProvider(cfg, l.providerId);
+      var el = document.createElement('label'); el.className = 'pick';
+      var radio = document.createElement('input');
+      radio.type = 'radio'; radio.name = 'cur'; radio.value = l.id;
+      radio.checked = (sel === l.id);
+      radio.onchange = function () { sel = l.id; };
+      var info = document.createElement('div'); info.className = 'info';
+      var name = document.createElement('div'); name.className = 'name'; name.textContent = l.modelId;
+      var meta = document.createElement('div'); meta.className = 'meta';
+      meta.textContent = (p ? (p.name || XL.normBase(p.baseUrl)) : '服务商缺失') + (l.ctx ? ' · ctx ' + l.ctx : '');
+      info.appendChild(name); info.appendChild(meta);
+      el.appendChild(radio); el.appendChild(info);
+      box.appendChild(el);
+    });
+
+    var fb = document.getElementById('fallbackSel');
+    fb.innerHTML = '';
+    var none = document.createElement('option'); none.value = ''; none.textContent = '无（不回退）';
+    fb.appendChild(none);
+    cfg.library.forEach(function (l) {
+      var p = XL.findProvider(cfg, l.providerId);
+      var o = document.createElement('option');
+      o.value = l.id;
+      o.textContent = l.modelId + (p ? '（' + (p.name || XL.normBase(p.baseUrl)) + '）' : '');
+      fb.appendChild(o);
+    });
+    fb.value = cfg.fallback || '';
+  }
+
+  document.getElementById('btnSave').onclick = function () {
+    var st = document.getElementById('status');
+    if (!sel) { st.className = 'status bad'; st.textContent = '请先选择一个当前模型'; return; }
+    cfg.current = sel;
+    var fb = document.getElementById('fallbackSel').value || null;
+    cfg.fallback = (fb && fb !== sel) ? fb : null;
+    XL.saveModels(cfg);
+    st.className = 'status ok';
+    st.textContent = '已保存：当前模型 ' + (XL.findLib(cfg, cfg.current) || {}).modelId +
+      (cfg.fallback ? '；备选 ' + (XL.findLib(cfg, cfg.fallback) || {}).modelId : '；无备选');
+  };
+  document.getElementById('btnManage').onclick = function () {
+    if (window.HRBridge && HRBridge.openSite) HRBridge.openSite('xuanlun-settings');
+  };
+  document.getElementById('btnBack').onclick = function () {
+    if (history.length > 1) history.back();
+    else location.href = 'xuanlun.html';
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>

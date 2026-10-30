@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>镟轮数据 · 作业列表</title>
+<link rel="stylesheet" href="xuanlun.css">
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" id="btnBack" title="返回引导页">‹</button>
+    <div class="title">镟轮数据</div>
+    <div style="width:36px"></div>
+  </div>
+
+  <main>
+    <div class="bar">
+      <button class="primary" id="btnNew">＋ 新建作业</button>
+      <button class="ghost" id="btnModels">模型</button>
+    </div>
+    <div class="job-list" id="jobList"></div>
+    <div class="hint" id="emptyHint">还没有作业。点击「＋ 新建作业」：只填线路与车号；日期、人员等进入作业后按节填写。</div>
+  </main>
+
+  <div class="modal hidden" id="modal">
+    <div class="modal-box">
+      <h3>新建作业</h3>
+      <label>线路号（如 4；两位数如 04 也可）
+        <input id="inLine" inputmode="numeric" placeholder="4" value="4">
+      </label>
+      <label>车号（6 位数字，如 047048）
+        <input id="inCar" inputmode="numeric" maxlength="6" placeholder="047048">
+      </label>
+      <div class="err" id="newErr"></div>
+      <div class="modal-actions">
+        <button class="ghost" id="btnNewCancel">取消</button>
+        <button class="primary" id="btnNewOk">创建</button>
+      </div>
+    </div>
+  </div>
+
+<script src="xuanlun-common.js"></script>
+<script>
+(function () {
+  'use strict';
+  var data = XL.load();
+
+  function render() {
+    var box = document.getElementById('jobList');
+    box.innerHTML = '';
+    var hint = document.getElementById('emptyHint');
+    if (!data.jobs.length) { hint.classList.remove('hidden'); return; }
+    hint.classList.add('hidden');
+    data.jobs.slice().sort(function (a, b) { return (b.created || 0) - (a.created || 0); }).forEach(function (job) {
+      XL.ensureJob(job);
+      var p = XL.progress(job);
+      var card = document.createElement('div'); card.className = 'job-card';
+      var info = document.createElement('div'); info.className = 'info';
+      var t = document.createElement('div'); t.className = 'jt';
+      t.textContent = job.line + '号线 · ' + job.car + '车';
+      var s = document.createElement('div'); s.className = 'js';
+      s.textContent = '6 节 · 24 轴 · 已上传 ' + p.filled + '/' + p.total;
+      info.appendChild(t); info.appendChild(s);
+      var acts = document.createElement('div'); acts.className = 'actions';
+      var openBtn = document.createElement('button'); openBtn.className = 'primary small'; openBtn.textContent = '打开';
+      openBtn.onclick = function () { location.href = 'xuanlun-job.html#' + encodeURIComponent(job.id); };
+      acts.appendChild(openBtn);
+      card.appendChild(info); card.appendChild(acts);
+      box.appendChild(card);
+    });
+  }
+
+  document.getElementById('btnNew').onclick = function () {
+    document.getElementById('newErr').textContent = '';
+    document.getElementById('modal').classList.remove('hidden');
+  };
+  document.getElementById('btnNewCancel').onclick = function () {
+    document.getElementById('modal').classList.add('hidden');
+  };
+  document.getElementById('btnNewOk').onclick = function () {
+    var err = document.getElementById('newErr');
+    var line = document.getElementById('inLine').value.trim();
+    var car = document.getElementById('inCar').value.trim();
+    if (!/^\d{1,2}$/.test(line)) { err.textContent = '线路号应为 1–2 位数字'; return; }
+    if (!/^\d{6}$/.test(car)) { err.textContent = '车号应为 6 位数字，如 047048'; return; }
+    var job = {
+      id: 'j' + Date.now(), line: XL.pad2(line), car: car, created: Date.now(),
+      sections: XL.sectionsFor(line, car), sheets: {}
+    };
+    XL.ensureJob(job);
+    data.jobs.push(job);
+    XL.save(data);
+    document.getElementById('modal').classList.add('hidden');
+    location.href = 'xuanlun-job.html#' + encodeURIComponent(job.id);
+  };
+  document.getElementById('btnBack').onclick = function () { XL.goBack('home'); };
+  document.getElementById('btnModels').onclick = function () { location.href = 'xuanlun-models.html'; };
+
+  render();
+})();
+</script>
+</body>
+</html>

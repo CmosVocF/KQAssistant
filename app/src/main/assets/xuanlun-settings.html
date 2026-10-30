@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>模型设置</title>
+<link rel="stylesheet" href="xuanlun.css">
+<style>
+  .card { background: #fff; border: 1px solid #e5e8ec; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .card h3 { font-size: 15px; margin-bottom: 10px; }
+  .prov { border: 1px solid #eef0f3; border-radius: 10px; padding: 10px; margin-bottom: 10px; background: #fafbfc; }
+  .prov .ph { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .prov .pname { font-size: 14px; font-weight: 700; }
+  .prov .pmeta { font-size: 11px; color: #8b949e; word-break: break-all; }
+  .prov .pacts { margin-left: auto; display: flex; gap: 6px; }
+  .prov .pacts button { padding: 5px 9px; font-size: 12px; border-radius: 8px; border: 1px solid #d0d7de; background: #fff; cursor: pointer; }
+  .prov .pacts button.del { color: #c0392b; border-color: #f5c6c6; background: #fdecec; }
+  .models { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .mrow { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e5e8ec; border-radius: 8px; padding: 7px 10px; }
+  .mrow .mid { font-size: 12.5px; word-break: break-all; }
+  .mrow .mctx { font-size: 11px; color: #8b949e; }
+  .mrow .add { margin-left: auto; padding: 4px 10px; font-size: 12px; border-radius: 8px; border: 1px solid #4A6CF7; background: #eef1ff; color: #3a56d4; font-weight: 700; cursor: pointer; }
+  .mrow .add.done { border-color: #c6ccd4; background: #f1f3f6; color: #8b949e; }
+  .lib { border: 1px solid #eef0f3; border-radius: 10px; padding: 10px; margin-bottom: 8px; background: #fafbfc; }
+  .lib .lh { display: flex; align-items: center; gap: 8px; }
+  .lib .lid { font-size: 13px; font-weight: 700; word-break: break-all; }
+  .lib .lmeta { font-size: 11px; color: #8b949e; }
+  .lib .lacts { margin-left: auto; display: flex; gap: 6px; }
+  .lib .lacts button { padding: 5px 9px; font-size: 12px; border-radius: 8px; border: 1px solid #d0d7de; background: #fff; cursor: pointer; }
+  .lib .lacts button.test { border-color: #4A6CF7; background: #eef1ff; color: #3a56d4; font-weight: 600; }
+  .lib .lacts button.rm { border-color: #f5c6c6; background: #fdecec; color: #c0392b; }
+  .lib .lcfg { display: flex; gap: 8px; margin-top: 8px; }
+  .lib .lcfg label { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #666; }
+  .lib .lcfg input, .lib .lcfg select { border: 1px solid #d0d7de; border-radius: 7px; padding: 7px 8px; font-size: 13px; background: #fff; width: 100%; }
+  .status { font-size: 12px; margin-top: 6px; white-space: pre-wrap; word-break: break-all; }
+  .status.ok { color: #1a7f37; }
+  .status.bad { color: #c0392b; }
+  .form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+  .form-row label { font-size: 12px; color: #666; }
+  .form-row input { border: 1px solid #d0d7de; border-radius: 8px; padding: 9px 10px; font-size: 14px; }
+  .empty { font-size: 12px; color: #8b949e; padding: 6px 2px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" id="btnBack" title="返回启动页">‹</button>
+    <div class="title">模型设置</div>
+    <div style="width:36px"></div>
+  </div>
+
+  <main>
+    <div class="card">
+      <h3>服务商（Provider）</h3>
+      <div id="providers"></div>
+      <button class="primary" id="btnAddProvider" style="width:100%;margin-top:6px">＋ 添加服务商</button>
+    </div>
+
+    <div class="card hidden" id="providerForm">
+      <h3>添加服务商</h3>
+      <div class="form-row"><label>名称（可选）</label><input id="pfName" placeholder="如 AMD 云 / DeepSeek"></div>
+      <div class="form-row"><label>Base URL（OpenAI 兼容，如 https://xxx/v1）</label><input id="pfBase" placeholder="https://developer.amd.com.cn/radeon/api/v1"></div>
+      <div class="form-row"><label>API Key</label><input id="pfKey" type="password" placeholder="sk-..."></div>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" id="pfCancel" style="flex:1">取消</button>
+        <button class="primary" id="pfSave" style="flex:2">保存并获取模型</button>
+      </div>
+      <div class="status" id="pfStatus"></div>
+    </div>
+
+    <div class="card">
+      <h3>可用模型（识别时从这里选；每个模型可单独配置与测试）</h3>
+      <div id="library"></div>
+      <div class="hint">在服务商模型列表点「＋ 添加」加入这里。每个模型可设置自己的上下文长度与思考等级，并可单独「测试」是否可用。</div>
+    </div>
+  </main>
+
+<script src="xuanlun-common.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cfg = XL.loadModels();
+
+  function ctxOf(m) {
+    return m.context_length || m.max_context_length || m.contextWindow ||
+      (m.capabilities && (m.capabilities.context || m.capabilities.context_length)) || '';
+  }
+  function esc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function save() { XL.saveModels(cfg); }
+
+  function render() {
+    // ---- 服务商 ----
+    var box = document.getElementById('providers');
+    box.innerHTML = '';
+    if (!cfg.providers.length) box.innerHTML = '<div class="empty">还没有服务商，点击下面按钮添加。</div>';
+    cfg.providers.forEach(function (p) {
+      var el = document.createElement('div'); el.className = 'prov';
+      var head = document.createElement('div'); head.className = 'ph';
+      var nm = document.createElement('div'); nm.className = 'pname'; nm.textContent = p.name || '未命名服务商';
+      var meta = document.createElement('div'); meta.className = 'pmeta';
+      meta.textContent = XL.normBase(p.baseUrl) + '  ·  Key: ' + (p.apiKey ? '已配置' : '未配置');
+      var acts = document.createElement('div'); acts.className = 'pacts';
+      var bFetch = document.createElement('button'); bFetch.textContent = '刷新模型';
+      bFetch.onclick = function () { fetchModels(p, el); };
+      var bDel = document.createElement('button'); bDel.className = 'del'; bDel.textContent = '删除';
+      bDel.onclick = function () { removeProvider(p.id); };
+      acts.appendChild(bFetch); acts.appendChild(bDel);
+      head.appendChild(nm); head.appendChild(meta); head.appendChild(acts);
+      el.appendChild(head);
+
+      var list = document.createElement('div'); list.className = 'models';
+      (p.models || []).forEach(function (m) {
+        var row = document.createElement('div'); row.className = 'mrow';
+        var mid = document.createElement('div'); mid.className = 'mid'; mid.textContent = m.id;
+        var ctx = ctxOf(m);
+        var mctx = document.createElement('div'); mctx.className = 'mctx'; mctx.textContent = ctx ? ('ctx ' + ctx) : '';
+        var inLib = cfg.library.some(function (l) { return l.providerId === p.id && l.modelId === m.id; });
+        var btn = document.createElement('button'); btn.className = 'add' + (inLib ? ' done' : '');
+        btn.textContent = inLib ? '已添加' : '＋ 添加';
+        if (!inLib) btn.onclick = function () { addToLibrary(p, m); };
+        row.appendChild(mid); row.appendChild(mctx); row.appendChild(btn);
+        list.appendChild(row);
+      });
+      if (!p.models || !p.models.length) {
+        var e = document.createElement('div'); e.className = 'empty';
+        e.textContent = '尚未获取模型，点「刷新模型」拉取。';
+        list.appendChild(e);
+      }
+      el.appendChild(list);
+      box.appendChild(el);
+    });
+
+    // ---- 可用模型（模型库）----
+    var lib = document.getElementById('library');
+    lib.innerHTML = '';
+    if (!cfg.library.length) { lib.innerHTML = '<div class="empty">模型库为空。</div>'; return; }
+    cfg.library.forEach(function (l) {
+      var p = XL.findProvider(cfg, l.providerId);
+      var card = document.createElement('div'); card.className = 'lib';
+
+      var head = document.createElement('div'); head.className = 'lh';
+      var info = document.createElement('div');
+      var idEl = document.createElement('div'); idEl.className = 'lid'; idEl.textContent = l.modelId;
+      var metaEl = document.createElement('div'); metaEl.className = 'lmeta';
+      metaEl.textContent = (p ? (p.name || XL.normBase(p.baseUrl)) : '服务商已删除');
+      info.appendChild(idEl); info.appendChild(metaEl);
+
+      var acts = document.createElement('div'); acts.className = 'lacts';
+      var bTest = document.createElement('button'); bTest.className = 'test'; bTest.textContent = '测试';
+      var bRm = document.createElement('button'); bRm.className = 'rm'; bRm.textContent = '移除';
+      bRm.onclick = function () { removeLibrary(l.id); };
+      acts.appendChild(bTest); acts.appendChild(bRm);
+      head.appendChild(info); head.appendChild(acts);
+      card.appendChild(head);
+
+      var st = document.createElement('div'); st.className = 'status';
+      bTest.onclick = function () { testModel(l, p, st); };
+
+      var cfgRow = document.createElement('div'); cfgRow.className = 'lcfg';
+      var labCtx = document.createElement('label'); labCtx.textContent = '上下文长度';
+      var inCtx = document.createElement('input');
+      inCtx.inputMode = 'numeric'; inCtx.placeholder = '可留空';
+      inCtx.value = l.ctx || '';
+      inCtx.onchange = function () { l.ctx = inCtx.value.trim(); save(); };
+      labCtx.appendChild(inCtx);
+      var labRe = document.createElement('label'); labRe.textContent = '思考等级';
+      var selRe = document.createElement('select');
+      ['', 'off', 'low', 'medium', 'high'].forEach(function (v) {
+        var o = document.createElement('option'); o.value = v;
+        o.textContent = v === '' ? '默认' : v;
+        selRe.appendChild(o);
+      });
+      selRe.value = l.reasoning || '';
+      selRe.onchange = function () { l.reasoning = selRe.value; save(); };
+      labRe.appendChild(selRe);
+      cfgRow.appendChild(labCtx); cfgRow.appendChild(labRe);
+      card.appendChild(cfgRow);
+      card.appendChild(st);
+      lib.appendChild(card);
+    });
+  }
+
+  function fetchModels(p, el) {
+    var base = XL.normBase(p.baseUrl);
+    var st = document.createElement('div'); st.className = 'status'; st.textContent = '正在获取模型…';
+    if (el) el.appendChild(st);
+    var raw = HRBridge && HRBridge.llmRequest
+      ? HRBridge.llmRequest(base + '/models', 'GET', '', p.apiKey)
+      : Promise.resolve(JSON.stringify({ ok: false, status: 0, text: '无原生桥' }));
+    Promise.resolve(raw).then(function (res) {
+      var r = typeof res === 'string' ? JSON.parse(res) : res;
+      if (!r.ok) { st.className = 'status bad'; st.textContent = '获取失败：HTTP ' + r.status + '\n' + String(r.text || '').slice(0, 300); return; }
+      var j; try { j = JSON.parse(r.text); } catch (e) { st.className = 'status bad'; st.textContent = '返回非 JSON'; return; }
+      var arr = (j && j.data) || (j && j.models) || [];
+      if (!arr.length) { st.className = 'status bad'; st.textContent = '接口未返回模型列表'; return; }
+      p.models = arr.map(function (m) { return { id: m.id || m.name || m.model, ctx: ctxOf(m) }; }).filter(function (m) { return m.id; });
+      save();
+      render();
+    }).catch(function (e) {
+      st.className = 'status bad';
+      st.textContent = '请求异常：' + (e && e.message ? e.message : e);
+    });
+  }
+
+  // 测试单个可用模型（用该模型的 provider + 模型名）
+  function testModel(l, p, st) {
+    if (!p) { st.className = 'status bad'; st.textContent = '该模型对应的服务商已被删除'; return; }
+    var base = XL.normBase(p.baseUrl);
+    st.className = 'status'; st.textContent = '测试中…';
+    var body = {
+      model: l.modelId,
+      messages: [{ role: 'user', content: '请只回复两个字：OK' }],
+      max_tokens: 256
+    };
+    var raw = HRBridge && HRBridge.llmRequest
+      ? HRBridge.llmRequest(base + '/chat/completions', 'POST', JSON.stringify(body), p.apiKey)
+      : Promise.resolve(JSON.stringify({ ok: false, status: 0, text: '无原生桥' }));
+    Promise.resolve(raw).then(function (res) {
+      var r = typeof res === 'string' ? JSON.parse(res) : res;
+      if (!r.ok) { st.className = 'status bad'; st.textContent = '测试失败：HTTP ' + r.status + '\n' + String(r.text || '').slice(0, 400); return; }
+      var j; try { j = JSON.parse(r.text); } catch (e) { st.className = 'status bad'; st.textContent = '返回非 JSON：' + String(r.text || '').slice(0, 200); return; }
+      var msg = j && j.choices && j.choices[0] && j.choices[0].message;
+      var content = msg ? (msg.content || msg.reasoning_content || '') : '';
+      var fin = j && j.choices && j.choices[0] && j.choices[0].finish_reason;
+      if (String(content).trim()) {
+        st.className = 'status ok';
+        st.textContent = '测试通过 ✔ 返回：' + String(content).slice(0, 200);
+      } else {
+        st.className = 'status bad';
+        st.textContent = '测试失败：HTTP 200 但返回为空（finish_reason=' + fin + '）\n' + String(r.text || '').slice(0, 400);
+      }
+    }).catch(function (e) {
+      st.className = 'status bad';
+      st.textContent = '请求异常：' + (e && e.message ? e.message : e);
+    });
+  }
+
+  function addToLibrary(p, m) {
+    if (cfg.library.some(function (l) { return l.providerId === p.id && l.modelId === m.id; })) return;
+    cfg.library.push({ id: 'm' + Date.now() + Math.floor(Math.random() * 1000), providerId: p.id, modelId: m.id, ctx: m.ctx || '', reasoning: '' });
+    save();
+    render();
+  }
+  function removeLibrary(id) {
+    cfg.library = cfg.library.filter(function (l) { return l.id !== id; });
+    if (cfg.current === id) cfg.current = null;
+    if (cfg.fallback === id) cfg.fallback = null;
+    save();
+    render();
+  }
+  function removeProvider(id) {
+    if (!confirm('删除该服务商及其已加入的模型？')) return;
+    cfg.providers = cfg.providers.filter(function (p) { return p.id !== id; });
+    cfg.library = cfg.library.filter(function (l) {
+      if (l.providerId !== id) return true;
+      if (cfg.current === l.id) cfg.current = null;
+      if (cfg.fallback === l.id) cfg.fallback = null;
+      return false;
+    });
+    save();
+    render();
+  }
+
+  document.getElementById('btnAddProvider').onclick = function () {
+    document.getElementById('providerForm').classList.remove('hidden');
+    document.getElementById('pfStatus').textContent = '';
+  };
+  document.getElementById('pfCancel').onclick = function () {
+    document.getElementById('providerForm').classList.add('hidden');
+  };
+  document.getElementById('pfSave').onclick = function () {
+    var base = document.getElementById('pfBase').value.trim();
+    var key = document.getElementById('pfKey').value.trim();
+    var name = document.getElementById('pfName').value.trim();
+    var st = document.getElementById('pfStatus');
+    if (!base) { st.className = 'status bad'; st.textContent = '请填写 Base URL'; return; }
+    if (!key) { st.className = 'status bad'; st.textContent = '请填写 API Key'; return; }
+    var p = { id: 'p' + Date.now(), name: name || XL.normBase(base), baseUrl: XL.normBase(base), apiKey: key, models: [] };
+    cfg.providers.push(p);
+    save();
+    render();
+    document.getElementById('providerForm').classList.add('hidden');
+    st.className = 'status ok';
+    st.textContent = '已保存，正在获取模型…';
+    fetchModels(p, document.getElementById('providers'));
+  };
+
+  document.getElementById('btnBack').onclick = function () { XL.goBack('home'); };
+
+  render();
+})();
+</script>
+</body>
+</html>

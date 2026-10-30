@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>编辑轴数据</title>
+<link rel="stylesheet" href="xuanlun.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .edit-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .img-half {
+    flex: 1; min-height: 0; background: #1b1f24; color: #9aa4b2;
+    display: flex; align-items: center; justify-content: center; position: relative;
+    overflow: hidden;
+  }
+  .img-half img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .img-half .ph { font-size: 13px; text-align: center; line-height: 1.8; }
+  .img-half .tag {
+    position: absolute; left: 10px; top: 10px; z-index: 2;
+    font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.45); color: #e6edf3;
+  }
+  .form-half { flex: 1; min-height: 0; overflow-y: auto; background: #f5f6f8; padding: 10px 12px 16px; }
+  .grp { background: #fff; border: 1px solid #e5e8ec; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+  .grp h4 { font-size: 13px; margin-bottom: 8px; color: #333; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cell { display: flex; flex-direction: column; gap: 3px; }
+  .cell label { font-size: 11px; color: #666; }
+  .cell input, .cell select { border: 1px solid #d0d7de; border-radius: 7px; padding: 7px 8px; font-size: 13px; background: #fff; width: 100%; }
+  .subtitle { font-size: 11px; color: #8b949e; margin: 6px 2px; }
+  .actbar { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 8px 0 0; background: linear-gradient(#f5f6f8, #f5f6f8 70%); }
+  .actbar button { flex: 1; }
+  .warn { font-size: 11px; color: #c0392b; margin: 4px 2px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" id="btnBack" title="返回作业详情">‹</button>
+    <div class="title small" id="barTitle">编辑</div>
+    <div style="width:36px"></div>
+  </div>
+
+  <div class="edit-wrap">
+    <div class="img-half" id="imgHalf">
+      <div class="tag" id="imgTag">图片预览</div>
+      <div class="ph" id="imgPh">尚未上传照片<br><span style="font-size:11px;opacity:.7">（上传后此处显示原图/增强图）</span></div>
+    </div>
+
+    <div class="form-half">
+      <div class="grp">
+        <h4>基本信息</h4>
+        <div class="grid2">
+          <div class="cell"><label>方向（A-B / B-A）</label>
+            <select id="inDir"><option value="A-B">A-B</option><option value="B-A">B-A</option></select>
+          </div>
+          <div class="cell"><label>轮对ID（识别所得，仅供参考）</label>
+            <input id="inAxleId" placeholder="如 01A023-1">
+          </div>
+        </div>
+        <div class="warn" id="warn"></div>
+      </div>
+
+      <div class="grp">
+        <h4>车轮镟修前测量尺寸</h4>
+        <div class="grid2">
+          <div class="cell"><label>轮缘高度 · 左轮</label><input id="bl_lh" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>轮缘高度 · 右轮</label><input id="br_lh" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>轮缘厚度 · 左轮</label><input id="bl_le" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>轮缘厚度 · 右轮</label><input id="br_le" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>直径 · 左轮</label><input id="bl_dia" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>直径 · 右轮</label><input id="br_dia" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>径向跳动量 · 左轮</label><input id="bl_rt" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>径向跳动量 · 右轮</label><input id="br_rt" inputmode="decimal" placeholder="mm"></div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <h4>车轮镟修后测量尺寸</h4>
+        <div class="grid2">
+          <div class="cell"><label>轮缘高度 · 左轮</label><input id="al_lh" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>轮缘高度 · 右轮</label><input id="ar_lh" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>轮缘厚度 · 左轮</label><input id="al_le" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>轮缘厚度 · 右轮</label><input id="ar_le" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>直径 · 左轮</label><input id="al_dia" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>直径 · 右轮</label><input id="ar_dia" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>径向跳动量 · 左轮</label><input id="al_rt" inputmode="decimal" placeholder="mm"></div>
+          <div class="cell"><label>径向跳动量 · 右轮</label><input id="ar_rt" inputmode="decimal" placeholder="mm"></div>
+        </div>
+      </div>
+
+      <div class="actbar">
+        <button class="ghost" id="btnCancel">取消</button>
+        <button class="primary" id="btnSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+<script src="xuanlun-common.js"></script>
+<script>
+(function () {
+  'use strict';
+  var parts = decodeURIComponent((location.hash || '').replace(/^#/, '')).split('|');
+  var jobId = parts[0], sec = parts[1], axleId = parts[2];
+  var data = XL.load();
+  var job = XL.getJob(data, jobId);
+  if (!job || !sec || !axleId) { alert('参数错误'); location.replace('xuanlun.html'); return; }
+  XL.ensureJob(job);
+  var sh = job.sheets[sec];
+  var ax = sh.axles[axleId] || (sh.axles[axleId] = { dir: 'A-B', data: null });
+  var d = ax.data || {};
+  var before = d.before || {}, after = d.after || {};
+
+  document.getElementById('barTitle').textContent = '编辑 · ' + axleId;
+  document.getElementById('inDir').value = ax.dir || 'A-B';
+  document.getElementById('inAxleId').value = d.axleId || '';
+
+  function setv(id, v) { var el = document.getElementById(id); el.value = (v === undefined || v === null) ? '' : v; }
+  function getv(id) { return (document.getElementById(id).value || '').trim(); }
+
+  setv('bl_lh', before.left && before.left.lh); setv('br_lh', before.right && before.right.lh);
+  setv('bl_le', before.left && before.left.le); setv('br_le', before.right && before.right.le);
+  setv('bl_dia', before.left && before.left.dia); setv('br_dia', before.right && before.right.dia);
+  setv('bl_rt', before.left && before.left.rt); setv('br_rt', before.right && before.right.rt);
+  setv('al_lh', after.left && after.left.lh); setv('ar_lh', after.right && after.right.lh);
+  setv('al_le', after.left && after.left.le); setv('ar_le', after.right && after.right.le);
+  setv('al_dia', after.left && after.left.dia); setv('ar_dia', after.right && after.right.dia);
+  setv('al_rt', after.left && after.left.rt); setv('ar_rt', after.right && after.right.rt);
+
+  // 若已有照片，加载预览（默认增强图；点击切换原图）
+  var imgPath = ax.imagePath || '';
+  var origPath = ax.origPath || '';
+  var imgEl = null, srcEnh = '', srcOrig = '', showingOrig = false;
+  function fetchImg(p) {
+    try {
+      var r = JSON.parse(HRBridge.xuanlunImageData(p));
+      return (r && r.ok) ? r.dataUrl : '';
+    } catch (e) { return ''; }
+  }
+  if (imgPath && window.HRBridge && HRBridge.xuanlunImageData) {
+    srcEnh = fetchImg(imgPath);
+    if (srcEnh) {
+      imgEl = document.createElement('img');
+      imgEl.src = srcEnh;
+      document.getElementById('imgPh').style.display = 'none';
+      document.getElementById('imgHalf').appendChild(imgEl);
+      document.getElementById('imgTag').textContent = '增强图（点击切换原图）';
+      if (origPath) {
+        srcOrig = fetchImg(origPath);
+        imgEl.onclick = function () {
+          if (!srcOrig) return;
+          showingOrig = !showingOrig;
+          imgEl.src = showingOrig ? srcOrig : srcEnh;
+          document.getElementById('imgTag').textContent = showingOrig ? '原图' : '增强图（点击切换原图）';
+        };
+      }
+    }
+  }
+
+  // 一致性提醒（若识别到的轮对ID与当前轴位不同）
+  var recAxle = d.axleId || '';
+  var warns = [];
+  if (recAxle && recAxle !== axleId) {
+    warns.push('识别到的轮对ID（' + recAxle + '）与当前轴位（' + axleId + '）不一致，请核对照片是否放错位置。');
+  }
+  if (d.carId && job.car && d.carId !== job.car) {
+    warns.push('识别到的车辆ID（' + d.carId + '）与作业车号（' + job.car + '）不一致。');
+  }
+  if (warns.length) document.getElementById('warn').textContent = warns.join(' ');
+
+  document.getElementById('btnBack').onclick = function () { history.back(); };
+  document.getElementById('btnCancel').onclick = function () { history.back(); };
+
+  document.getElementById('btnSave').onclick = function () {
+    var dir = document.getElementById('inDir').value;
+    var dataObj = {
+      axleId: getv('inAxleId'),
+      before: {
+        left: { lh: getv('bl_lh'), le: getv('bl_le'), dia: getv('bl_dia'), rt: getv('bl_rt') },
+        right: { lh: getv('br_lh'), le: getv('br_le'), dia: getv('br_dia'), rt: getv('br_rt') }
+      },
+      after: {
+        left: { lh: getv('al_lh'), le: getv('al_le'), dia: getv('al_dia'), rt: getv('al_rt') },
+        right: { lh: getv('ar_lh'), le: getv('ar_le'), dia: getv('ar_dia'), rt: getv('ar_rt') }
+      }
+    };
+    // 全部为空则视为清空
+    var any = false;
+    ['before', 'after'].forEach(function (k) {
+      ['left', 'right'].forEach(function (s) {
+        ['lh', 'le', 'dia', 'rt'].forEach(function (f) { if (dataObj[k][s][f]) any = true; });
+      });
+    });
+    ax.dir = dir;
+    ax.data = any ? dataObj : null;
+    XL.save(data);
+    history.back();
+  };
+})();
+</script>
+</body>
+</html>
