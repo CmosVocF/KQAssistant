@@ -218,11 +218,16 @@
         };
         var bPhoto = document.createElement('button');
         bPhoto.className = 'upload-btn';
-        bPhoto.textContent = ax.data ? '重新上传' : '上传照片';
+        bPhoto.textContent = (ax.data || ax.imagePath) ? '重新上传' : '上传照片';
         bPhoto.onclick = function () { beginPick(aid); };
         actions.appendChild(bEdit); actions.appendChild(bPhoto);
         var st = document.createElement('div'); st.className = 'st';
-        st.textContent = ax.data ? '已填数据' : '未填写';
+        var stText = '未上传';
+        if (ax.data && ax.recStatus === 'ok') stText = '已识别';
+        else if (ax.recStatus === 'fail') stText = '识别失败';
+        else if (ax.recStatus === 'pending') stText = '识别中…';
+        else if (ax.imagePath) stText = '已上传';
+        st.textContent = stText;
         row.appendChild(an); row.appendChild(actions); row.appendChild(st);
         axlesEl.appendChild(row);
       })(n);
@@ -268,13 +273,27 @@
       var ax2 = sh2.axles[req.axle] || (sh2.axles[req.axle] = { dir: 'A-B', data: null });
       ax2.imagePath = obj.path;
       ax2.origPath = obj.origPath || '';
+      ax2.recStatus = 'pending';
+      ax2.recError = '';
       XL.save(d2);
       data = d2; job = j2;
       lastPick = { jobId: j2.id, section: secId, axle: req.axle };
       if (window.HRBridge && HRBridge.xuanlunRecognize) {
         showBusy('正在识别 ' + req.axle + ' …\n（主模型失败会自动尝试备选模型，请稍候）');
-        HRBridge.xuanlunRecognize(JSON.stringify({ jobId: j2.id, section: secId, axle: req.axle, imagePath: obj.path }));
+        try {
+          HRBridge.xuanlunRecognize(JSON.stringify({ jobId: j2.id, section: secId, axle: req.axle, imagePath: obj.path }));
+        } catch (e3) {
+          hideBusy();
+          ax2.recStatus = 'fail';
+          ax2.recError = '识别调用失败：' + (e3 && e3.message ? e3.message : e3);
+          XL.save(d2);
+          alert('识别调用失败：' + ax2.recError);
+          openEdit(lastPick);
+        }
       } else {
+        ax2.recStatus = 'fail';
+        ax2.recError = '当前版本未提供识别接口，可手动填写';
+        XL.save(d2);
         openEdit(lastPick);
       }
     } catch (e) {
@@ -296,7 +315,25 @@
   window.__xuanlunRecognized = function (obj) {
     hideBusy();
     if (!obj || !obj.ok) {
-      alert('识别失败：' + ((obj && obj.error) || '未知错误') + '\n将打开编辑页，可手动核对/填写。');
+      var errMsg = (obj && obj.error) || '未知错误';
+      try {
+        var p0 = lastPick;
+        if (p0) {
+          var d0 = XL.load();
+          var j0 = XL.getJob(d0, p0.jobId);
+          if (j0) {
+            XL.ensureJob(j0);
+            var sh0 = j0.sheets[p0.section];
+            if (sh0) {
+              var ax0 = sh0.axles[p0.axle] || (sh0.axles[p0.axle] = { dir: 'A-B', data: null });
+              ax0.recStatus = 'fail';
+              ax0.recError = errMsg;
+              XL.save(d0);
+            }
+          }
+        }
+      } catch (e0) { /* ignore */ }
+      alert('识别失败：' + errMsg + '\n将打开编辑页，可手动核对/填写，或返回后重新上传。');
       openEdit(lastPick);
       return;
     }
@@ -317,6 +354,9 @@
         after: { left: normWheel(after['左轮']), right: normWheel(after['右轮']) }
       };
       ax2.dir = (s(r['车辆方向']) === '1') ? 'B-A' : 'A-B';
+      ax2.recStatus = 'ok';
+      ax2.recModel = obj.model || '';
+      ax2.recError = '';
       XL.save(d2);
       data = d2; job = j2;
 

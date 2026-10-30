@@ -10,23 +10,34 @@
   .edit-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
   .img-half {
     flex: 1; min-height: 0; background: #1b1f24; color: #9aa4b2;
-    display: flex; align-items: center; justify-content: center; position: relative;
-    overflow: hidden;
+    position: relative; overflow: hidden;
   }
-  .img-half img { max-width: 100%; max-height: 100%; object-fit: contain; }
-  .img-half .ph { font-size: 13px; text-align: center; line-height: 1.8; }
-  .img-half .tag {
-    position: absolute; left: 10px; top: 10px; z-index: 2;
-    font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.45); color: #e6edf3;
+  .viewer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
+  .viewer img { max-width: none; max-height: none; width: 100%; height: auto; transform-origin: center center; will-change: transform; }
+  .viewer .ph { font-size: 13px; text-align: center; line-height: 1.8; padding: 20px; }
+  .tag-btn {
+    position: absolute; left: 10px; top: 10px; z-index: 5;
+    background: rgba(0,0,0,.55); color: #e6edf3; border: 1px solid rgba(255,255,255,.25);
+    border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+  .tag-btn:active { background: rgba(0,0,0,.75); }
+  .hint-chip {
+    position: absolute; right: 10px; top: 10px; z-index: 5; font-size: 11px;
+    color: #c9d1d9; background: rgba(0,0,0,.35); border-radius: 999px; padding: 5px 10px;
   }
   .form-half { flex: 1; min-height: 0; overflow-y: auto; background: #f5f6f8; padding: 10px 12px 16px; }
+  .rec-banner {
+    font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px;
+    background: #eef1ff; color: #2f45b5; border: 1px solid #dbe2ff;
+  }
+  .rec-banner.ok { background: #e9f7ef; color: #1a7f37; border-color: #c6e9d3; }
+  .rec-banner.bad { background: #fdecec; color: #c0392b; border-color: #f5c6c6; }
   .grp { background: #fff; border: 1px solid #e5e8ec; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
   .grp h4 { font-size: 13px; margin-bottom: 8px; color: #333; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .cell { display: flex; flex-direction: column; gap: 3px; }
   .cell label { font-size: 11px; color: #666; }
   .cell input, .cell select { border: 1px solid #d0d7de; border-radius: 7px; padding: 7px 8px; font-size: 13px; background: #fff; width: 100%; }
-  .subtitle { font-size: 11px; color: #8b949e; margin: 6px 2px; }
   .actbar { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 8px 0 0; background: linear-gradient(#f5f6f8, #f5f6f8 70%); }
   .actbar button { flex: 1; }
   .warn { font-size: 11px; color: #c0392b; margin: 4px 2px; }
@@ -41,11 +52,16 @@
 
   <div class="edit-wrap">
     <div class="img-half" id="imgHalf">
-      <div class="tag" id="imgTag">图片预览</div>
-      <div class="ph" id="imgPh">尚未上传照片<br><span style="font-size:11px;opacity:.7">（上传后此处显示原图/增强图）</span></div>
+      <div class="viewer" id="viewer">
+        <div class="ph" id="imgPh">尚未上传照片<br><span style="font-size:11px;opacity:.7">（上传后此处显示图片）</span></div>
+      </div>
+      <button class="tag-btn hidden" id="imgToggle">显示原图</button>
+      <div class="hint-chip">双指缩放 / 拖动查看</div>
     </div>
 
     <div class="form-half">
+      <div class="rec-banner" id="recBanner"></div>
+
       <div class="grp">
         <h4>基本信息</h4>
         <div class="grid2">
@@ -53,7 +69,7 @@
             <select id="inDir"><option value="A-B">A-B</option><option value="B-A">B-A</option></select>
           </div>
           <div class="cell"><label>轮对ID（识别所得，仅供参考）</label>
-            <input id="inAxleId" placeholder="如 01A023-1">
+            <input id="inAxleId" placeholder="如 04B047-3">
           </div>
         </div>
         <div class="warn" id="warn"></div>
@@ -113,7 +129,7 @@
   document.getElementById('inDir').value = ax.dir || 'A-B';
   document.getElementById('inAxleId').value = d.axleId || '';
 
-  function setv(id, v) { var el = document.getElementById(id); el.value = (v === undefined || v === null) ? '' : v; }
+  function setv(id, v) { document.getElementById(id).value = (v === undefined || v === null) ? '' : v; }
   function getv(id) { return (document.getElementById(id).value || '').trim(); }
 
   setv('bl_lh', before.left && before.left.lh); setv('br_lh', before.right && before.right.lh);
@@ -125,47 +141,107 @@
   setv('al_dia', after.left && after.left.dia); setv('ar_dia', after.right && after.right.dia);
   setv('al_rt', after.left && after.left.rt); setv('ar_rt', after.right && after.right.rt);
 
-  // 若已有照片，加载预览（默认增强图；点击切换原图）
-  var imgPath = ax.imagePath || '';
-  var origPath = ax.origPath || '';
+  // ---------- 识别状态 ----------
+  var banner = document.getElementById('recBanner');
+  if (ax.recStatus === 'ok') {
+    banner.className = 'rec-banner ok';
+    banner.textContent = '识别成功' + (ax.recModel ? '（模型：' + ax.recModel + '）' : '') + '，请核对下方数据后保存。';
+  } else if (ax.recStatus === 'fail') {
+    banner.className = 'rec-banner bad';
+    banner.textContent = '识别失败：' + (ax.recError || '未知原因') + '。可手动填写，或返回后重新上传照片。';
+  } else if (ax.recStatus === 'pending') {
+    banner.className = 'rec-banner';
+    banner.textContent = '识别中…若长时间无结果，请返回后重新上传。';
+  } else if (ax.imagePath) {
+    banner.className = 'rec-banner';
+    banner.textContent = '已上传图片（未识别），可手动填写。';
+  } else {
+    banner.className = 'rec-banner';
+    banner.textContent = '尚未上传照片，可手动填写数据。';
+  }
+
+  // ---------- 一致性提醒 ----------
+  var warns = [];
+  if (d.axleId && d.axleId !== axleId) warns.push('识别轮对ID（' + d.axleId + '）与当前轴位（' + axleId + '）不一致。');
+  if (d.carId && job.car && d.carId !== job.car) warns.push('识别车辆ID（' + d.carId + '）与作业车号（' + job.car + '）不一致。');
+  if (warns.length) document.getElementById('warn').textContent = warns.join(' ');
+
+  // ---------- 图片预览（双指缩放 / 拖动 / 原图切换） ----------
   var imgEl = null, srcEnh = '', srcOrig = '', showingOrig = false;
+  var viewer = document.getElementById('viewer');
+  var ph = document.getElementById('imgPh');
+  var toggle = document.getElementById('imgToggle');
+
   function fetchImg(p) {
     try {
       var r = JSON.parse(HRBridge.xuanlunImageData(p));
       return (r && r.ok) ? r.dataUrl : '';
     } catch (e) { return ''; }
   }
-  if (imgPath && window.HRBridge && HRBridge.xuanlunImageData) {
-    srcEnh = fetchImg(imgPath);
+
+  if (ax.imagePath && window.HRBridge && HRBridge.xuanlunImageData) {
+    srcEnh = fetchImg(ax.imagePath);
     if (srcEnh) {
       imgEl = document.createElement('img');
       imgEl.src = srcEnh;
-      document.getElementById('imgPh').style.display = 'none';
-      document.getElementById('imgHalf').appendChild(imgEl);
-      document.getElementById('imgTag').textContent = '增强图（点击切换原图）';
-      if (origPath) {
-        srcOrig = fetchImg(origPath);
-        imgEl.onclick = function () {
-          if (!srcOrig) return;
-          showingOrig = !showingOrig;
-          imgEl.src = showingOrig ? srcOrig : srcEnh;
-          document.getElementById('imgTag').textContent = showingOrig ? '原图' : '增强图（点击切换原图）';
-        };
+      imgEl.draggable = false;
+      viewer.appendChild(imgEl);
+      ph.style.display = 'none';
+      if (ax.origPath) {
+        srcOrig = fetchImg(ax.origPath);
+        if (srcOrig) {
+          toggle.classList.remove('hidden');
+          toggle.textContent = '显示原图';
+          toggle.onclick = function () {
+            showingOrig = !showingOrig;
+            imgEl.src = showingOrig ? srcOrig : srcEnh;
+            toggle.textContent = showingOrig ? '显示增强图' : '显示原图';
+            resetView();
+          };
+        }
       }
+    } else {
+      ph.textContent = '图片读取失败';
     }
   }
 
-  // 一致性提醒（若识别到的轮对ID与当前轴位不同）
-  var recAxle = d.axleId || '';
-  var warns = [];
-  if (recAxle && recAxle !== axleId) {
-    warns.push('识别到的轮对ID（' + recAxle + '）与当前轴位（' + axleId + '）不一致，请核对照片是否放错位置。');
+  var scale = 1, tx = 0, ty = 0, mode = 0, baseScale = 1, baseTx = 0, baseTy = 0, startDist = 0, startX = 0, startY = 0;
+  function clampScale(s) { return Math.min(6, Math.max(1, s)); }
+  function applyT() { if (imgEl) imgEl.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
+  function resetView() { scale = 1; tx = 0; ty = 0; applyT(); }
+  function dist2(t) {
+    var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
   }
-  if (d.carId && job.car && d.carId !== job.car) {
-    warns.push('识别到的车辆ID（' + d.carId + '）与作业车号（' + job.car + '）不一致。');
-  }
-  if (warns.length) document.getElementById('warn').textContent = warns.join(' ');
+  viewer.addEventListener('touchstart', function (e) {
+    if (!imgEl) return;
+    if (e.touches.length === 2) {
+      mode = 2; startDist = dist2(e.touches); baseScale = scale; baseTx = tx; baseTy = ty;
+    } else if (e.touches.length === 1) {
+      mode = 1; startX = e.touches[0].clientX; startY = e.touches[0].clientY; baseTx = tx; baseTy = ty;
+    }
+  }, { passive: true });
+  viewer.addEventListener('touchmove', function (e) {
+    if (!imgEl || !mode) return;
+    if (mode === 2 && e.touches.length === 2) {
+      var dd = dist2(e.touches);
+      scale = clampScale(baseScale * (dd / (startDist || 1)));
+      applyT(); e.preventDefault();
+    } else if (mode === 1 && e.touches.length === 1) {
+      tx = baseTx + (e.touches[0].clientX - startX);
+      ty = baseTy + (e.touches[0].clientY - startY);
+      applyT(); e.preventDefault();
+    }
+  }, { passive: false });
+  viewer.addEventListener('touchend', function (e) {
+    if (e.touches.length === 0) { mode = 0; }
+    else if (e.touches.length === 1) {
+      mode = 1; startX = e.touches[0].clientX; startY = e.touches[0].clientY; baseTx = tx; baseTy = ty; startDist = 0;
+    }
+  }, { passive: true });
+  viewer.addEventListener('dblclick', function () { resetView(); });
 
+  // ---------- 保存 ----------
   document.getElementById('btnBack').onclick = function () { history.back(); };
   document.getElementById('btnCancel').onclick = function () { history.back(); };
 
@@ -182,11 +258,10 @@
         right: { lh: getv('ar_lh'), le: getv('ar_le'), dia: getv('ar_dia'), rt: getv('ar_rt') }
       }
     };
-    // 全部为空则视为清空
     var any = false;
     ['before', 'after'].forEach(function (k) {
-      ['left', 'right'].forEach(function (s) {
-        ['lh', 'le', 'dia', 'rt'].forEach(function (f) { if (dataObj[k][s][f]) any = true; });
+      ['left', 'right'].forEach(function (s2) {
+        ['lh', 'le', 'dia', 'rt'].forEach(function (f) { if (dataObj[k][s2][f]) any = true; });
       });
     });
     ax.dir = dir;
