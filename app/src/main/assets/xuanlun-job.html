@@ -70,17 +70,23 @@
 
   function num(v) { if (v === null || v === undefined || v === '') return null; var n = parseFloat(v); return isFinite(n) ? n : null; }
   function fmt(v) { if (v === null || v === undefined) return ''; return String(v); }
+  // 与模板单元格格式一致：0.00（两位小数）
+  function fmt2(v) {
+    if (v === null || v === undefined || v === '') return '';
+    var n = parseFloat(v);
+    return isFinite(n) ? n.toFixed(2) : String(v);
+  }
   function fmtDate(v) {
     if (!v) return '';
     var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!m) return String(v);
     return m[1] + '年' + parseInt(m[2], 10) + '月' + parseInt(m[3], 10) + '日';
   }
-  function absDiff(a, b) { var x = num(a), y = num(b); if (x === null || y === null) return ''; return String(Math.abs(x - y)); }
+  function absDiff(a, b) { var x = num(a), y = num(b); if (x === null || y === null) return ''; return Math.abs(x - y).toFixed(2); }
   function maxMin(vals) {
     var ns = vals.map(num).filter(function (v) { return v !== null; });
     if (ns.length < 2) return '';
-    return String(Math.max.apply(null, ns) - Math.min.apply(null, ns));
+    return (Math.max.apply(null, ns) - Math.min.apply(null, ns)).toFixed(2);
   }
 
   function buildPreview(sec) {
@@ -105,10 +111,10 @@
       return { b: b || {}, a: a || {} };
     }
     var d = [rowCells(1, 'L'), rowCells(1, 'R'), rowCells(2, 'L'), rowCells(2, 'R'), rowCells(3, 'L'), rowCells(3, 'R'), rowCells(4, 'L'), rowCells(4, 'R')];
-    function td(v) { return '<td>' + fmt(v) + '</td>'; }
+    function td(v) { return '<td>' + fmt2(v) + '</td>'; }
     function g(i) { return absDiff(d[i * 2].b.dia, d[i * 2 + 1].b.dia); }
     function l(i) { return absDiff(d[i * 2].a.dia, d[i * 2 + 1].a.dia); }
-    function nCut(i) { var x = num(d[i].b.dia), y = num(d[i].a.dia); return (x !== null && y !== null) ? String(x - y) : ''; }
+    function nCut(i) { var x = num(d[i].b.dia), y = num(d[i].a.dia); return (x !== null && y !== null) ? (x - y).toFixed(2) : ''; }
     var o1 = maxMin([d[0].a.dia, d[1].a.dia, d[2].a.dia, d[3].a.dia]);
     var o2 = maxMin([d[4].a.dia, d[5].a.dia, d[6].a.dia, d[7].a.dia]);
     var oAll = maxMin(d.map(function (x) { return x.a.dia; }));
@@ -348,8 +354,10 @@
       var ax2 = sh2.axles[p.axle] || (sh2.axles[p.axle] = { dir: 'A-B', data: null });
       var r = obj.data || {};
       var before = r['加工前'] || {}, after = r['加工后'] || {};
+      var recCar = s(r['车辆ID']).trim();
+      if (!/^\d{6}$/.test(recCar)) recCar = '';   // 车辆ID 必须是 6 位数字，否则丢弃
       ax2.data = {
-        axleId: s(r['轮对ID']), carId: s(r['车辆ID']), date: s(r['加工日期']),
+        axleId: s(r['轮对ID']), carId: recCar, date: s(r['加工日期']),
         before: { left: normWheel(before['左轮']), right: normWheel(before['右轮']) },
         after: { left: normWheel(after['左轮']), right: normWheel(after['右轮']) }
       };

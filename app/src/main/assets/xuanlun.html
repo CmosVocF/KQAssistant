@@ -25,11 +25,11 @@
   <div class="modal hidden" id="modal">
     <div class="modal-box">
       <h3>新建作业</h3>
-      <label>线路号（如 4；两位数如 04 也可）
-        <input id="inLine" inputmode="numeric" placeholder="4" value="4">
+      <label>线路号
+        <input id="inLine" inputmode="numeric" maxlength="2" placeholder="如 4">
       </label>
-      <label>车号（6 位数字，如 047048）
-        <input id="inCar" inputmode="numeric" maxlength="6" placeholder="047048">
+      <label>车号
+        <input id="inCar" inputmode="numeric" maxlength="6" placeholder="如 047048">
       </label>
       <div class="err" id="newErr"></div>
       <div class="modal-actions">
@@ -83,6 +83,13 @@
     var car = document.getElementById('inCar').value.trim();
     if (!/^\d{1,2}$/.test(line)) { err.textContent = '线路号应为 1–2 位数字'; return; }
     if (!/^\d{6}$/.test(car)) { err.textContent = '车号应为 6 位数字，如 047048'; return; }
+    // 车号规则：前三位为奇数节，后三位为偶数节，且两节连续（如 047048 合法，048049 非法）
+    var halfA = parseInt(car.slice(0, 3), 10);
+    var halfB = parseInt(car.slice(3, 6), 10);
+    if (!(halfA % 2 === 1 && halfB % 2 === 0 && halfB === halfA + 1)) {
+      err.textContent = '车号不合法：应为连续的两节，奇数节在前、偶数节在后（如 047048），请检查';
+      return;
+    }
     var job = {
       id: 'j' + Date.now(), line: XL.pad2(line), car: car, created: Date.now(),
       sections: XL.sectionsFor(line, car), sheets: {}
