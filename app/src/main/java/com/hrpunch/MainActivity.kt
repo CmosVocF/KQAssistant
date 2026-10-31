@@ -286,6 +286,23 @@ JSON 格式：
 
     private fun xuanlunRecognizeAsync(requestJson: String) {
         android.widget.Toast.makeText(this, "正在识别，请稍候…", android.widget.Toast.LENGTH_SHORT).show()
+        val delivered = java.util.concurrent.atomic.AtomicBoolean(false)
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        fun deliverOnce(o: org.json.JSONObject) {
+            if (delivered.compareAndSet(false, true)) {
+                runOnUiThread {
+                    val msg = if (o.optBoolean("ok")) "识别完成" else "识别失败：" + o.optString("error")
+                    android.widget.Toast.makeText(this, msg.take(120), android.widget.Toast.LENGTH_SHORT).show()
+                }
+                deliverXuanlunRecognized(o)
+            }
+        }
+        // 兜底：210 秒无结果则返回超时错误，避免界面一直"识别中"
+        val watchdog = Runnable {
+            deliverOnce(org.json.JSONObject().put("ok", false).put("error", "识别超时（模型长时间无返回）"))
+        }
+        handler.postDelayed(watchdog, 210_000)
+
         Thread {
             val out = org.json.JSONObject()
             try {
@@ -319,7 +336,6 @@ JSON 格式：
                         try {
                             val parsed = xlChatOnce(c, dataUrl, r)
                             out.put("ok", true).put("data", parsed).put("model", c.optString("model"))
-                            deliverXuanlunRecognized(out)
                             return@Thread
                         } catch (e: Exception) {
                             lastError = "[" + c.optString("model") + "] " + (e.message ?: "识别失败")
@@ -327,14 +343,16 @@ JSON 格式：
                     }
                 }
                 out.put("ok", false).put("error", lastError)
-            } catch (e: Exception) {
-                out.put("ok", false).put("error", e.message ?: "识别异常")
+            } catch (t: Throwable) {
+                try {
+                    out.put("ok", false).put("error", "识别异常：" + (t.message ?: t.javaClass.simpleName))
+                } catch (e2: Exception) {
+                    /* ignore */
+                }
+            } finally {
+                handler.removeCallbacks(watchdog)
+                deliverOnce(out)
             }
-            runOnUiThread {
-                val msg = if (out.optBoolean("ok")) "识别完成" else "识别失败：" + out.optString("error")
-                android.widget.Toast.makeText(this, msg.take(120), android.widget.Toast.LENGTH_SHORT).show()
-            }
-            deliverXuanlunRecognized(out)
         }.start()
     }
 
