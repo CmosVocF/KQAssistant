@@ -1,5 +1,9 @@
 (function (global) {
   'use strict';
+  // 浏览器预览：没有 Android 原生桥时同步加载 mock（Android 内已有 HRBridge，不会加载）
+  if (!global.HRBridge && typeof document !== 'undefined') {
+    document.write('<script src="xuanlun-mock.js"><\/script>');
+  }
   var KEY = 'xuanlun_data';
 
   function load() {
