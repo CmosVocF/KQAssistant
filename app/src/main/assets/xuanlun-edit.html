@@ -13,7 +13,7 @@
     position: relative; overflow: hidden;
   }
   .viewer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
-  .viewer img { max-width: none; max-height: none; width: 100%; height: auto; transform-origin: center center; will-change: transform; }
+  .viewer img { max-width: 100%; max-height: 100%; width: auto; height: auto; transform-origin: center center; will-change: transform; }
   .viewer .ph { font-size: 13px; text-align: center; line-height: 1.8; padding: 20px; }
   .tag-btn {
     position: absolute; left: 10px; top: 10px; z-index: 5;
@@ -160,10 +160,26 @@
     banner.textContent = '尚未上传照片，可手动填写数据。';
   }
 
-  // ---------- 一致性提醒 ----------
+  // ---------- 一致性提醒 + 数值合理性检查 ----------
   var warns = [];
   if (d.axleId && d.axleId !== axleId) warns.push('识别轮对ID（' + d.axleId + '）与当前轴位（' + axleId + '）不一致。');
   if (d.carId && job.car && d.carId !== job.car) warns.push('识别车辆ID（' + d.carId + '）与作业车号（' + job.car + '）不一致。');
+  // 合理范围：轮缘高度/厚度 20–40mm，直径 700–900mm，径向跳动 0–2mm
+  function checkRange(label, v, lo, hi) {
+    if (v === '' || v === null || v === undefined) return;
+    var n = parseFloat(v);
+    if (!isFinite(n) || n < lo || n > hi) warns.push(label + ' = ' + v + ' 超出合理范围（' + lo + '–' + hi + '），请核对识别结果。');
+  }
+  [['加工前', before], ['加工后', after]].forEach(function (g) {
+    ['left', 'right'].forEach(function (side) {
+      var w = (g[1] || {})[side] || {};
+      var tag = g[0] + (side === 'left' ? '·左轮' : '·右轮');
+      checkRange(tag + ' 轮缘高度', w.lh, 20, 40);
+      checkRange(tag + ' 轮缘厚度', w.le, 20, 40);
+      checkRange(tag + ' 直径', w.dia, 700, 900);
+      checkRange(tag + ' 径向跳动量', w.rt, 0, 2);
+    });
+  });
   if (warns.length) document.getElementById('warn').textContent = warns.join(' ');
 
   // ---------- 图片预览（双指缩放 / 拖动 / 原图切换） ----------

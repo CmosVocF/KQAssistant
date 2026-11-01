@@ -93,10 +93,13 @@ main { padding: 12px; }
 }
 .thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .confirm-btn { box-shadow: 0 0 0 3px rgba(74, 108, 247, .18); }
-.task-pop { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.22); }
+.task-pop {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 900; background: rgba(0,0,0,.22);
+}
 .task-card {
-  position: absolute; right: 10px; top: calc(58px + env(safe-area-inset-top));
-  width: min(360px, calc(100vw - 20px)); max-height: 70vh; overflow-y: auto;
+  position: fixed; top: 64px; right: 10px; z-index: 901;
+  width: 340px; max-width: calc(100vw - 20px); max-height: 70vh; overflow-y: auto;
   background: #fff; border-radius: 14px; box-shadow: 0 14px 34px rgba(0,0,0,.25);
   padding: 10px 12px;
 }

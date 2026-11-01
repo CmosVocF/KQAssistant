@@ -496,14 +496,24 @@
 
   // ---------------- 任务浮窗 ----------------
   document.getElementById('btnTasks').onclick = function () {
-    renderTasks();
-    document.getElementById('taskPop').classList.remove('hidden');
+    try {
+      renderTasks();
+      var pop = document.getElementById('taskPop');
+      pop.classList.remove('hidden');
+      pop.style.display = 'block';
+    } catch (e) {
+      alert('任务队列打开失败：' + (e && e.message ? e.message : e));
+    }
   };
   document.getElementById('taskClose').onclick = function () {
     document.getElementById('taskPop').classList.add('hidden');
+    document.getElementById('taskPop').style.display = 'none';
   };
   document.getElementById('taskPop').onclick = function (e) {
-    if (e.target === this) this.classList.add('hidden');
+    if (e.target === this) {
+      this.classList.add('hidden');
+      this.style.display = 'none';
+    }
   };
 
   // ---------------- 导出 Excel ----------------

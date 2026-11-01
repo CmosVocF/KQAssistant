@@ -275,12 +275,13 @@ JSON 格式：
 }
 
 要求：
-1. 数值保留照片上的小数位数（如 29.85），不要四舍五入；
-2. 照片里有"加工前测量值"和"加工后测量值"两组，分别填入"加工前"/"加工后"；
-3. "左轮"/"右轮"按照片上的左、右列读取；
-4. 找不到的字段填 null；
-5. "轮对ID"是形如 04B047-4 的编号（含字母和横线）；"车辆ID"是单独一行的 6 位纯数字（如 047048），不要与"轮对ID"混淆，也不要包含字母；
-6. 只输出 JSON。
+1. 逐位读取照片中的数字，特别注意区分相似的 3/8、1/7、0/8、2/7；禁止根据上下文猜测数字；
+2. 数值保留照片上的小数位数（如 29.85），不要四舍五入；轮缘高度、轮缘厚度、直径必须逐位核对，直径通常是 8xx.xx；
+3. 照片里有"加工前测量值"和"加工后测量值"两组，分别填入"加工前"/"加工后"，不要串行；
+4. "左轮"/"右轮"按照片上的左、右列读取；
+5. 任何看不清或不确定的数字填 null，不要编造；
+6. "轮对ID"是形如 04B047-4 的编号（含字母和横线）；"车辆ID"是单独一行的 6 位纯数字（如 047048），不要与"轮对ID"混淆，也不要包含字母；
+7. 只输出 JSON。
 """.trimIndent()
 
     private fun xuanlunRecognizeAsync(requestJson: String) {
@@ -488,12 +489,22 @@ JSON 格式：
         val opts = android.graphics.BitmapFactory.Options()
         opts.inJustDecodeBounds = true
         contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) }
+        val maxDim = kotlin.math.max(opts.outWidth, opts.outHeight)
         var sample = 1
-        while (opts.outWidth / sample > maxSize || opts.outHeight / sample > maxSize) sample *= 2
+        // 解码结果不超过 3000px（控制内存），随后统一缩放到 maxSize，避免 inSampleSize 把图压到 1000px 导致模糊
+        while (maxDim / sample > 3000) sample *= 2
         val o2 = android.graphics.BitmapFactory.Options()
         o2.inSampleSize = sample
-        return contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o2) }
+        val bmp = contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o2) }
             ?: throw IllegalStateException("无法解码图片")
+        val maxSide = kotlin.math.max(bmp.width, bmp.height)
+        if (maxSide <= maxSize) return bmp
+        val scale = maxSize.toFloat() / maxSide
+        val w = kotlin.math.max(1, (bmp.width * scale).toInt())
+        val h = kotlin.math.max(1, (bmp.height * scale).toInt())
+        val scaled = Bitmap.createScaledBitmap(bmp, w, h, true)
+        if (scaled !== bmp) bmp.recycle()
+        return scaled
     }
 
     private fun xuanlunHandleResult(uri: android.net.Uri?) {
@@ -503,11 +514,11 @@ JSON 格式：
             val jobId = req.optString("jobId")
             val section = req.optString("section")
             val axle = req.optString("axle")
-            val bmp = decodeSampled(uri, 1600)
+            val bmp = decodeSampled(uri, 2000)
             val dir = java.io.File(filesDir, "xuanlun/$jobId/$section")
             dir.mkdirs()
             val orig = java.io.File(dir, "${axle}_orig.jpg")
-            java.io.FileOutputStream(orig).use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            java.io.FileOutputStream(orig).use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
             bmp.recycle()
             val out = java.io.File(dir, "$axle.jpg")
             // 进入透视校正页（拖动四角确认）

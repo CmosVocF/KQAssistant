@@ -76,9 +76,9 @@ class XuanlunCropActivity : Activity() {
             val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(out)
             val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+            // 保留彩色（大模型对彩色原图识别更准），仅做轻微对比度增强
             val cm = ColorMatrix()
-            cm.setSaturation(0f)
-            val contrast = 1.22f
+            val contrast = 1.12f
             val t = (1 - contrast) * 128f
             cm.postConcat(ColorMatrix(floatArrayOf(
                 contrast, 0f, 0f, 0f, t,
@@ -91,7 +91,7 @@ class XuanlunCropActivity : Activity() {
 
             val f = File(outPath)
             f.parentFile?.mkdirs()
-            FileOutputStream(f).use { out.compress(Bitmap.CompressFormat.JPEG, 86, it) }
+            FileOutputStream(f).use { out.compress(Bitmap.CompressFormat.JPEG, 92, it) }
             out.recycle()
             setResult(RESULT_OK, Intent().putExtra("out", f.absolutePath))
             finish()
