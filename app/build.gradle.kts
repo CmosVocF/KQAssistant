@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
@@ -11,13 +11,18 @@ android {
         applicationId = "com.hrpunch"
         minSdk = 24
         targetSdk = 34
-        versionCode = 34
-        versionName = "1.4.0-test024"
+        versionCode = 35
+        versionName = "1.4.0-test025"
+
+        // 只打包 arm64，控制 OpenCV 原生库体积
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     signingConfigs {
         getByName("debug") {
-            // 浣跨敤榛樿 debug keystore锛況elease 澶嶇敤瀹冿紝鏂逛究鐩存帴瀹夎娴嬭瘯
+            // 使用默认 debug keystore；release 复用它，方便直接安装测试
         }
     }
 
@@ -41,7 +46,7 @@ android {
         jvmTarget = "17"
     }
 
-    // 姣忎釜鐗堟湰鐨?APK 鏂囦欢鍚嶅甫鐗堟湰鍙凤紝閬垮厤涓嶅悓娴嬭瘯鐗堜簰鐩歌鐩?
+    // 每个版本的 APK 文件名带版本号，避免不同测试版互相覆盖
     applicationVariants.all {
         val vn = versionName ?: ""
         val vName = name
@@ -57,4 +62,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.webkit:webkit:1.10.0")
+    // 文档/表格边缘自动检测（Canny + 轮廓 + 四边形拟合）
+    implementation("org.opencv:opencv:4.9.0")
 }

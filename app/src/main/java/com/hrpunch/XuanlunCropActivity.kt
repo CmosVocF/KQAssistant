@@ -17,6 +17,14 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.max
 import kotlin.math.roundToInt
+import org.opencv.android.OpenCVLoader
+import org.opencv.android.Utils
+import org.opencv.core.Mat
+import org.opencv.core.MatOfPoint
+import org.opencv.core.MatOfPoint2f
+import org.opencv.core.Point
+import org.opencv.core.Size
+import org.opencv.imgproc.Imgproc
 
 /** 镟轮照片校正页：拖动四角 → 透视校正 + 灰度增强 → 保存。 */
 class XuanlunCropActivity : Activity() {
@@ -26,6 +34,7 @@ class XuanlunCropActivity : Activity() {
         const val EXTRA_OUT = "out"
     }
 
+    private var cvReady = false
     private lateinit var cropView: CropView
     private var bmp: Bitmap? = null
     private var outPath: String = ""
@@ -44,16 +53,130 @@ class XuanlunCropActivity : Activity() {
             finish()
             return
         }
-        val initial = loadLastQuad(b)
+        val auto = detectPaperQuad(b)
+        val initial = auto ?: loadLastQuad(b)
         cropView.setBitmap(b, initial)
-        if (initial != null) {
-            Toast.makeText(this, "已套用上次框选位置，可拖动微调", Toast.LENGTH_SHORT).show()
-        }
+        Toast.makeText(
+            this,
+            when {
+                auto != null -> "已自动识别纸张边缘，可直接确认或微调"
+                initial != null -> "已套用上次框选位置，可拖动微调"
+                else -> "未能自动识别，请拖动四角"
+            },
+            Toast.LENGTH_SHORT
+        ).show()
         findViewById<Button>(R.id.btnCancel).setOnClickListener {
             setResult(RESULT_CANCELED)
             finish()
         }
         findViewById<Button>(R.id.btnOk).setOnClickListener { doCrop() }
+    }
+
+    private fun ensureOpenCv(): Boolean {
+        if (cvReady) return true
+        return try {
+            cvReady = OpenCVLoader.initLocal()
+            if (!cvReady) cvReady = OpenCVLoader.initDebug()
+            cvReady
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
+    /** 用 OpenCV 找纸张/表格四角：Canny 边缘 + 轮廓 + 四边形拟合。 */
+    private fun detectPaperQuad(b: Bitmap): Array<PointF>? {
+        if (!ensureOpenCv()) return null
+        val w = b.width
+        val h = b.height
+        val maxSide = max(w, h)
+        if (maxSide <= 200) return null
+        val scale = 700f / maxSide
+        if (scale >= 1f) return null
+        val sw = (w * scale).toInt().coerceAtLeast(1)
+        val sh = (h * scale).toInt().coerceAtLeast(1)
+        var src: Mat? = null
+        var gray: Mat? = null
+        var small: Mat? = null
+        var edges: Mat? = null
+        var kernel: Mat? = null
+        var hierarchy: Mat? = null
+        return try {
+            src = Mat(); Utils.bitmapToMat(b, src!!)
+            gray = Mat(); Imgproc.cvtColor(src, gray!!, Imgproc.COLOR_RGBA2GRAY)
+            small = Mat(); Imgproc.resize(gray, small!!, Size(sw.toDouble(), sh.toDouble()))
+            Imgproc.GaussianBlur(small, small, Size(5.0, 5.0), 0.0)
+            edges = Mat(); Imgproc.Canny(small, edges!!, 50.0, 150.0)
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
+            Imgproc.dilate(edges, edges, kernel)
+            val contours = ArrayList<MatOfPoint>()
+            hierarchy = Mat()
+            Imgproc.findContours(edges, contours, hierarchy!!, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+            var best: Array<Point>? = null
+            var bestArea = 0.0
+            val minArea = sw.toDouble() * sh * 0.12
+            for (c in contours) {
+                var c2f: MatOfPoint2f? = null
+                var approx: MatOfPoint2f? = null
+                try {
+                    c2f = MatOfPoint2f(*c.toArray())
+                    val peri = Imgproc.arcLength(c2f, true)
+                    approx = MatOfPoint2f()
+                    Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
+                    if (approx.total() == 4L) {
+                        val mp = MatOfPoint(*approx.toArray())
+                        val convex = Imgproc.isContourConvex(mp)
+                        val area = Imgproc.contourArea(mp)
+                        mp.release()
+                        if (convex && area > bestArea && area > minArea) {
+                            bestArea = area
+                            best = approx.toArray()
+                        }
+                    }
+                } catch (e: Throwable) {
+                    /* ignore contour */
+                } finally {
+                    c2f?.release()
+                    approx?.release()
+                }
+            }
+            if (best == null) return null
+            val inv = 1f / scale
+            val pts = best!!.map { PointF(it.x.toFloat() * inv, it.y.toFloat() * inv) }.toTypedArray()
+            orderQuad(pts)
+        } catch (e: Throwable) {
+            null
+        } finally {
+            src?.release(); gray?.release(); small?.release(); edges?.release()
+            kernel?.release(); hierarchy?.release()
+        }
+    }
+
+    /** 排序为左上、右上、右下、左下。 */
+    private fun orderQuad(src: Array<PointF>): Array<PointF>? {
+        if (src.size != 4) return null
+        var cx = 0f
+        var cy = 0f
+        for (p in src) { cx += p.x; cy += p.y }
+        cx /= 4f; cy /= 4f
+        val sorted = src.sortedBy {
+            kotlin.math.atan2((it.y - cy).toDouble(), (it.x - cx).toDouble())
+        }.toMutableList()
+        var start = 0
+        var min = Float.MAX_VALUE
+        for (i in 0..3) {
+            val s = sorted[i].x + sorted[i].y
+            if (s < min) { min = s; start = i }
+        }
+        val out = ArrayList<PointF>(4)
+        for (i in 0..3) out.add(sorted[(start + i) % 4])
+        val cross = (out[1].x - out[0].x) * (out[2].y - out[1].y) -
+            (out[1].y - out[0].y) * (out[2].x - out[1].x)
+        if (cross < 0f) {
+            val t = out[1]
+            out[1] = out[3]
+            out[3] = t
+        }
+        return out.toTypedArray()
     }
 
     /** 上次用户确认过的四角（归一化 0..1），用于下一张自动套用。 */
