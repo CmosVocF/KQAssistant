@@ -11,8 +11,8 @@ android {
         applicationId = "com.hrpunch"
         minSdk = 24
         targetSdk = 34
-        versionCode = 35
-        versionName = "1.4.0-test025"
+        versionCode = 36
+        versionName = "1.4.0-test026"
 
         // 只打包 arm64，控制 OpenCV 原生库体积
         ndk {
@@ -62,6 +62,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.webkit:webkit:1.10.0")
-    // 文档/表格边缘自动检测（Canny + 轮廓 + 四边形拟合）
+    // 文档/表格边缘自动检测（CLAHE + Canny + 轮廓 + 四边形拟合）
     implementation("org.opencv:opencv:4.9.0")
 }

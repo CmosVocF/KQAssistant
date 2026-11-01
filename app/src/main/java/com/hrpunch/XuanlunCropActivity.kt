@@ -74,16 +74,28 @@ class XuanlunCropActivity : Activity() {
 
     private fun ensureOpenCv(): Boolean {
         if (cvReady) return true
-        return try {
-            cvReady = OpenCVLoader.initLocal()
-            if (!cvReady) cvReady = OpenCVLoader.initDebug()
-            cvReady
+        try {
+            if (OpenCVLoader.initLocal()) {
+                cvReady = true
+                return true
+            }
         } catch (e: Throwable) {
+            /* try loadLibrary below */
+        }
+        return try {
+            System.loadLibrary("opencv_java4")
+            cvReady = true
+            true
+        } catch (e: Throwable) {
+            cvReady = false
             false
         }
     }
 
-    /** 用 OpenCV 找纸张/表格四角：Canny 边缘 + 轮廓 + 四边形拟合。 */
+    /**
+     * 用 OpenCV 找纸张四角：CLAHE 增强 + bilateral 去噪 + Canny 边缘 + 轮廓 + 四边形拟合。
+     * 参数已在样例图（IMG_20261013_170040 / 170049）上离线验证通过。
+     */
     private fun detectPaperQuad(b: Bitmap): Array<PointF>? {
         if (!ensureOpenCv()) return null
         val w = b.width
@@ -96,48 +108,61 @@ class XuanlunCropActivity : Activity() {
         val sh = (h * scale).toInt().coerceAtLeast(1)
         var src: Mat? = null
         var gray: Mat? = null
-        var small: Mat? = null
-        var edges: Mat? = null
+        var enhanced: Mat? = null
+        var filtered: Mat? = null
         var kernel: Mat? = null
-        var hierarchy: Mat? = null
         return try {
             src = Mat(); Utils.bitmapToMat(b, src!!)
             gray = Mat(); Imgproc.cvtColor(src, gray!!, Imgproc.COLOR_RGBA2GRAY)
-            small = Mat(); Imgproc.resize(gray, small!!, Size(sw.toDouble(), sh.toDouble()))
-            Imgproc.GaussianBlur(small, small, Size(5.0, 5.0), 0.0)
-            edges = Mat(); Imgproc.Canny(small, edges!!, 50.0, 150.0)
-            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0))
-            Imgproc.dilate(edges, edges, kernel)
-            val contours = ArrayList<MatOfPoint>()
-            hierarchy = Mat()
-            Imgproc.findContours(edges, contours, hierarchy!!, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+            val small = Mat()
+            Imgproc.resize(gray, small, Size(sw.toDouble(), sh.toDouble()))
+            val clahe = Imgproc.createCLAHE(2.0, Size(8.0, 8.0))
+            enhanced = Mat(); clahe.apply(small, enhanced!!)
+            small.release()
+            filtered = Mat(); Imgproc.bilateralFilter(enhanced, filtered!!, 7, 50.0, 50.0)
+            kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+            val areaMin = sw.toDouble() * sh * 0.10
+            val areaMax = sw.toDouble() * sh * 0.90
             var best: Array<Point>? = null
             var bestArea = 0.0
-            val minArea = sw.toDouble() * sh * 0.12
-            for (c in contours) {
-                var c2f: MatOfPoint2f? = null
-                var approx: MatOfPoint2f? = null
-                try {
-                    c2f = MatOfPoint2f(*c.toArray())
+            val pairs = arrayOf(intArrayOf(15, 45), intArrayOf(20, 60), intArrayOf(30, 90), intArrayOf(50, 150))
+            for (pair in pairs) {
+                val edges = Mat()
+                Imgproc.Canny(filtered, edges, pair[0].toDouble(), pair[1].toDouble())
+                Imgproc.dilate(edges, edges, kernel)
+                val contours = ArrayList<MatOfPoint>()
+                Imgproc.findContours(edges, contours, Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
+                for (c in contours) {
+                    val a = Imgproc.contourArea(c)
+                    if (a < areaMin || a > areaMax) continue
+                    val r = Imgproc.boundingRect(c)
+                    // 排除贴着图像边界的轮廓（通常是画面边框，不是纸张）
+                    if (r.x <= 2 || r.y <= 2 || r.x + r.width >= sw - 2 || r.y + r.height >= sh - 2) continue
+                    val c2f = MatOfPoint2f(*c.toArray())
                     val peri = Imgproc.arcLength(c2f, true)
-                    approx = MatOfPoint2f()
-                    Imgproc.approxPolyDP(c2f, approx, 0.02 * peri, true)
-                    if (approx.total() == 4L) {
-                        val mp = MatOfPoint(*approx.toArray())
-                        val convex = Imgproc.isContourConvex(mp)
-                        val area = Imgproc.contourArea(mp)
-                        mp.release()
-                        if (convex && area > bestArea && area > minArea) {
-                            bestArea = area
-                            best = approx.toArray()
+                    var found: Array<Point>? = null
+                    for (eps in doubleArrayOf(0.01, 0.02, 0.03, 0.05, 0.08)) {
+                        val approx = MatOfPoint2f()
+                        Imgproc.approxPolyDP(c2f, approx, eps * peri, true)
+                        if (approx.total() == 4L) {
+                            val mp = MatOfPoint(*approx.toArray())
+                            val convex = Imgproc.isContourConvex(mp)
+                            mp.release()
+                            if (convex) {
+                                found = approx.toArray()
+                                approx.release()
+                                break
+                            }
                         }
+                        approx.release()
                     }
-                } catch (e: Throwable) {
-                    /* ignore contour */
-                } finally {
-                    c2f?.release()
-                    approx?.release()
+                    c2f.release()
+                    if (found != null && a > bestArea) {
+                        bestArea = a
+                        best = found
+                    }
                 }
+                edges.release()
             }
             if (best == null) return null
             val inv = 1f / scale
@@ -146,8 +171,7 @@ class XuanlunCropActivity : Activity() {
         } catch (e: Throwable) {
             null
         } finally {
-            src?.release(); gray?.release(); small?.release(); edges?.release()
-            kernel?.release(); hierarchy?.release()
+            src?.release(); gray?.release(); enhanced?.release(); filtered?.release(); kernel?.release()
         }
     }
 
