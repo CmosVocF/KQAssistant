@@ -8,7 +8,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="拖动四个角点贴合纸张边缘（会自动套用上次位置，可直接确认）"
+        android:text="拖动四个角点框住表格区域（放大镜会显示细节）"
         android:textColor="#E6EDF3"
         android:textSize="13sp"
         android:padding="12dp"
