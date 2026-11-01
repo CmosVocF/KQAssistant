@@ -324,10 +324,10 @@
     inDate.value = sh.date || '';
     inDate.onchange = function () { sh.date = inDate.value; XL.save(data); refreshPreview(); };
     var inMaker = document.createElement('input');
-    inMaker.value = sh.maker || ''; inMaker.placeholder = '镟修人（可留空）';
+    inMaker.value = sh.maker || '';
     inMaker.onchange = function () { sh.maker = inMaker.value; XL.save(data); refreshPreview(); };
     var inChecker = document.createElement('input');
-    inChecker.value = sh.checker || ''; inChecker.placeholder = '复核人（可留空）';
+    inChecker.value = sh.checker || '';
     inChecker.onchange = function () { sh.checker = inChecker.value; XL.save(data); refreshPreview(); };
 
     field('日期', inDate, true);

@@ -25,11 +25,11 @@
   <div class="modal hidden" id="modal">
     <div class="modal-box">
       <h3>新建作业</h3>
-      <label>线路号
-        <input id="inLine" inputmode="numeric" maxlength="2" placeholder="如 4">
+      <label>线路号（输入数字，例如：1，2，3）
+        <input id="inLine" inputmode="numeric" maxlength="2">
       </label>
-      <label>车号
-        <input id="inCar" inputmode="numeric" maxlength="6" placeholder="如 047048">
+      <label>车号（输入数字，例如：001002，045046）
+        <input id="inCar" inputmode="numeric" maxlength="6">
       </label>
       <div class="err" id="newErr"></div>
       <div class="modal-actions">
@@ -104,6 +104,11 @@
   document.getElementById('btnModels').onclick = function () { location.href = 'xuanlun-models.html'; };
 
   render();
+
+  // 预览用：?newjob=1 直接打开新建作业弹窗
+  if (/[?&]newjob=1/.test(location.search)) {
+    document.getElementById('modal').classList.remove('hidden');
+  }
 })();
 </script>
 </body>
