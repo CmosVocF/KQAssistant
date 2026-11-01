@@ -108,8 +108,8 @@ class CropView @JvmOverloads constructor(
         canvas.drawColor(0xFF1B1F24.toInt())
 
         val m = Matrix()
-        m.postTranslate(-px * s, -py * s)
-        m.postTranslate(cx, cy)
+        m.setScale(s, s)
+        m.postTranslate(cx - px * s, cy - py * s)
         canvas.drawBitmap(b, m, bmpPaint)
 
         canvas.drawLine(cx - radius, cy, cx + radius, cy, magCross)
