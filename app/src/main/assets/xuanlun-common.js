@@ -66,7 +66,7 @@
       var s = (global.HRBridge && HRBridge.getXuanlunModels) ? HRBridge.getXuanlunModels() : localStorage.getItem(MK);
       if (s) cfg = JSON.parse(s);
     } catch (e) { cfg = null; }
-    if (!cfg || !Array.isArray(cfg.providers)) cfg = migrateModels();
+    if (!cfg || !Array.isArray(cfg.providers)) cfg = emptyModels();
     if (!Array.isArray(cfg.library)) cfg.library = [];
     return cfg;
   }
@@ -76,25 +76,6 @@
       if (global.HRBridge && HRBridge.setXuanlunModels) HRBridge.setXuanlunModels(s);
       else localStorage.setItem(MK, s);
     } catch (e) { /* ignore */ }
-  }
-  // 兼容旧的单模型配置（xuanlun_llm）
-  function migrateModels() {
-    var old = null;
-    try {
-      var s = (global.HRBridge && HRBridge.getLlmConfig) ? HRBridge.getLlmConfig() : localStorage.getItem('xuanlun_llm');
-      if (s) old = JSON.parse(s);
-    } catch (e) { old = null; }
-    var cfg = emptyModels();
-    if (old && old.baseUrl && old.apiKey) {
-      var pid = 'p' + Date.now();
-      cfg.providers.push({ id: pid, name: '默认服务商', baseUrl: old.baseUrl, apiKey: old.apiKey, models: [] });
-      if (old.model) {
-        var mid = 'm' + Date.now();
-        cfg.library.push({ id: mid, providerId: pid, modelId: old.model, ctx: old.contextLength || '', reasoning: old.reasoning || '' });
-        cfg.current = mid;
-      }
-    }
-    return cfg;
   }
   function normBase(url) {
     var s = String(url || '').trim().replace(/\/+$/, '');

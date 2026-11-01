@@ -8,7 +8,7 @@
   'use strict';
   if (window.HRBridge) return;
 
-  var K1 = 'xuanlun_data', K2 = 'xuanlun_models', K3 = 'xuanlun_llm';
+  var K1 = 'xuanlun_data', K2 = 'xuanlun_models';
   var imgs = {};
 
   function qs(name) {
@@ -45,8 +45,6 @@
     setXuanlunData: function (s) { try { localStorage.setItem(K1, s); } catch (e) {} },
     getXuanlunModels: function () { return localStorage.getItem(K2); },
     setXuanlunModels: function (s) { try { localStorage.setItem(K2, s); } catch (e) {} },
-    getLlmConfig: function () { return localStorage.getItem(K3); },
-    setLlmConfig: function (s) { try { localStorage.setItem(K3, s); } catch (e) {} },
     openSite: function (site) {
       var map = { home: 'launcher.html', xuanlun: 'xuanlun.html', 'xuanlun-settings': 'xuanlun-settings.html' };
       if (map[site]) location.href = map[site];

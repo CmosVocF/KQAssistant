@@ -86,17 +86,6 @@ class JSBridge(
         prefs.edit().putString("xuanlun_data", (json ?: "")).apply()
     }
 
-    /** 镟轮数据：大模型配置（baseUrl/apiKey/model/参数，JSON 字符串）。 */
-    @JavascriptInterface
-    fun getLlmConfig(): String? {
-        return prefs.getString("xuanlun_llm", null)
-    }
-
-    @JavascriptInterface
-    fun setLlmConfig(json: String) {
-        prefs.edit().putString("xuanlun_llm", (json ?: "")).apply()
-    }
-
     /** 镟轮数据：模型配置（服务商 / 模型库 / 当前与备选模型，JSON 字符串）。 */
     @JavascriptInterface
     fun getXuanlunModels(): String? {

@@ -314,12 +314,7 @@ JSON 格式：
                 val cfg = try {
                     org.json.JSONObject(prefs.getString("xuanlun_models", "{}"))
                 } catch (e: Exception) { org.json.JSONObject() }
-                var candidates = buildXlCandidates(cfg)
-                if (candidates.isEmpty()) {
-                    // 兼容旧版单模型配置（xuanlun_llm）
-                    val legacy = legacyXlModel()
-                    if (legacy != null) candidates = listOf(legacy)
-                }
+                val candidates = buildXlCandidates(cfg)
                 if (candidates.isEmpty()) throw IllegalStateException("未配置模型：请先在启动页 ⚙ 中添加服务商与可用模型")
 
                 val file = java.io.File(imagePath)
@@ -353,25 +348,6 @@ JSON 格式：
                 deliverOnce(out)
             }
         }.start()
-    }
-
-    /** 旧版单模型配置（xuanlun_llm）：baseUrl/apiKey/model 直接可用时作为回退。 */
-    private fun legacyXlModel(): org.json.JSONObject? {
-        return try {
-            val s = prefs.getString("xuanlun_llm", null)
-            if (s.isNullOrBlank()) null else {
-                val o = org.json.JSONObject(s)
-                val base = o.optString("baseUrl").trim()
-                val key = o.optString("apiKey").trim()
-                val model = o.optString("model").trim()
-                if (base.isEmpty() || key.isEmpty() || model.isEmpty()) null
-                else org.json.JSONObject()
-                    .put("model", model)
-                    .put("base", base.trimEnd('/'))
-                    .put("key", key)
-                    .put("reasoning", o.optString("reasoning"))
-            }
-        } catch (e: Exception) { null }
     }
 
     private fun xlChatOnce(c: org.json.JSONObject, dataUrl: String, reasoning: String): org.json.JSONObject {
