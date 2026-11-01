@@ -44,12 +44,41 @@ class XuanlunCropActivity : Activity() {
             finish()
             return
         }
-        cropView.setBitmap(b)
+        val initial = loadLastQuad(b)
+        cropView.setBitmap(b, initial)
+        if (initial != null) {
+            Toast.makeText(this, "已套用上次框选位置，可拖动微调", Toast.LENGTH_SHORT).show()
+        }
         findViewById<Button>(R.id.btnCancel).setOnClickListener {
             setResult(RESULT_CANCELED)
             finish()
         }
         findViewById<Button>(R.id.btnOk).setOnClickListener { doCrop() }
+    }
+
+    /** 上次用户确认过的四角（归一化 0..1），用于下一张自动套用。 */
+    private fun loadLastQuad(b: Bitmap): Array<PointF>? {
+        return try {
+            val s = getSharedPreferences("hrpunch_config", MODE_PRIVATE).getString("xuanlun_last_quad", null)
+                ?: return null
+            val arr = org.json.JSONArray(s)
+            if (arr.length() != 4) return null
+            Array(4) { i ->
+                val o = arr.getJSONObject(i)
+                PointF((o.getDouble("x").toFloat() * b.width), (o.getDouble("y").toFloat() * b.height))
+            }
+        } catch (e: Exception) { null }
+    }
+
+    private fun saveLastQuad(q: Array<PointF>, w: Int, h: Int) {
+        try {
+            val arr = org.json.JSONArray()
+            for (p in q) {
+                arr.put(org.json.JSONObject().put("x", (p.x / w).toDouble()).put("y", (p.y / h).toDouble()))
+            }
+            getSharedPreferences("hrpunch_config", MODE_PRIVATE).edit()
+                .putString("xuanlun_last_quad", arr.toString()).apply()
+        } catch (e: Exception) { /* ignore */ }
     }
 
     private fun dist(a: PointF, b: PointF): Float {
@@ -61,6 +90,7 @@ class XuanlunCropActivity : Activity() {
         val b = bmp ?: return
         try {
             val q = cropView.getQuad()
+            saveLastQuad(q, b.width, b.height)
             val src = floatArrayOf(
                 q[0].x, q[0].y, q[1].x, q[1].y,
                 q[2].x, q[2].y, q[3].x, q[3].y

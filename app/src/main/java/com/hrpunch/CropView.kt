@@ -40,18 +40,27 @@ class CropView @JvmOverloads constructor(
     }
     private val bmpPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
-    fun setBitmap(b: Bitmap) {
+    fun setBitmap(b: Bitmap, initial: Array<PointF>? = null) {
         bmp = b
-        val c = autoCorners(b)
+        val c = if (initial != null && areaOf(initial) > b.width.toFloat() * b.height * 0.08f) initial else autoCorners(b)
         for (i in 0..3) { corners[i].x = c[i].x; corners[i].y = c[i].y }
         invalidate()
+    }
+
+    private fun areaOf(q: Array<PointF>): Float {
+        var a = 0f
+        for (i in 0..3) {
+            val j = (i + 1) % 4
+            a += q[i].x * q[j].y - q[j].x * q[i].y
+        }
+        return kotlin.math.abs(a) / 2f
     }
 
     /** 返回图片坐标系的四个角点（TL, TR, BR, BL）。 */
     fun getQuad(): Array<PointF> = corners.map { PointF(it.x, it.y) }.toTypedArray()
 
     private fun defaultCorners(w: Int, h: Int): Array<PointF> {
-        val mx = w * 0.04f; val my = h * 0.04f
+        val mx = w * 0.06f; val my = h * 0.06f
         return arrayOf(
             PointF(mx, my), PointF(w - mx, my), PointF(w - mx, h - my), PointF(mx, h - my)
         )
