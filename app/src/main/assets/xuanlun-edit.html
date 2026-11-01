@@ -145,7 +145,7 @@
   var banner = document.getElementById('recBanner');
   if (ax.recStatus === 'ok') {
     banner.className = 'rec-banner ok';
-    banner.textContent = '识别成功' + (ax.recModel ? '（模型：' + ax.recModel + '）' : '') + '，请核对下方数据后保存。';
+    banner.textContent = '识别成功' + (ax.recModel ? '（模型：' + ax.recModel + '）' : '') + '，请核对下方数据，确认无误后点「保存」。';
   } else if (ax.recStatus === 'fail') {
     banner.className = 'rec-banner bad';
     banner.textContent = '识别失败：' + (ax.recError || '未知原因') + '。可手动填写，或返回后重新上传照片。';
@@ -266,6 +266,8 @@
     });
     ax.dir = dir;
     ax.data = any ? dataObj : null;
+    ax.confirmed = true;          // 用户已核对确认，作业页按钮恢复为「编辑」
+    if (ax.recStatus === 'fail') ax.recStatus = 'manual';
     XL.save(data);
     history.back();
   };

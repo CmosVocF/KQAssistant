@@ -10,7 +10,7 @@
   <div class="topbar">
     <button class="icon-btn" id="btnBack" title="返回作业列表">‹</button>
     <div class="title small" id="barTitle">作业详情</div>
-    <div style="width:36px"></div>
+    <button class="icon-btn" id="btnTasks" title="任务队列">☰</button>
   </div>
 
   <main>
@@ -25,32 +25,37 @@
 
     <div class="tabs" id="tabs"></div>
 
-    <!-- 识别任务队列 -->
-    <div class="panel">
-      <div class="sec-title">识别任务</div>
-      <div id="tasks" class="tasks"></div>
-    </div>
-
-    <!-- 1) 预览 -->
+    <!-- 表格预览 -->
     <div class="panel">
       <div class="sec-title">表格预览（最终样式，暂无数据处为空白）</div>
       <div id="preview"></div>
     </div>
 
-    <!-- 2) 镟修数据（每轴上传） -->
+    <!-- 镟修数据（每轴） -->
     <div class="panel">
       <div class="sec-title">镟修数据 · <span id="secName"></span></div>
       <div class="axles" id="axles"></div>
     </div>
 
-    <!-- 3) 页面设置（本节） -->
+    <!-- 页面设置（本节） -->
     <div class="panel">
       <div class="sec-title">页面设置（本节）</div>
       <div class="fields" id="fields"></div>
     </div>
 
-    <div class="hint">每节数据独立保存；方向 A-B / B-A 可按轴单独切换（B-A 时该轴左右轮数据在填表时互换）。</div>
+    <div class="hint">每节数据独立保存；方向 A-B / B-A 在编辑页设置（B-A 时填表左右轮互换）。</div>
   </main>
+
+  <!-- 任务队列浮窗 -->
+  <div class="task-pop hidden" id="taskPop">
+    <div class="task-card">
+      <div class="task-head">
+        <div class="task-title">任务队列</div>
+        <button class="icon-btn" id="taskClose" style="width:30px;height:30px;font-size:14px">✕</button>
+      </div>
+      <div id="taskList" class="task-list"></div>
+    </div>
+  </div>
 
   <div class="busy hidden" id="busy">
     <div class="busy-box">
@@ -77,9 +82,12 @@
   var initSec = parseInt(hashParts[1], 10);
   var activeSec = (isFinite(initSec) && initSec >= 0 && initSec < job.sections.length) ? initSec : 0;
 
+  var thumbCache = {};
+  var recTimers = {};
+  var lastPick = null;
+
   function num(v) { if (v === null || v === undefined || v === '') return null; var n = parseFloat(v); return isFinite(n) ? n : null; }
   function fmt(v) { if (v === null || v === undefined) return ''; return String(v); }
-  // 与模板单元格格式一致：0.00（两位小数）
   function fmt2(v) {
     if (v === null || v === undefined || v === '') return '';
     var n = parseFloat(v);
@@ -98,6 +106,7 @@
     return (Math.max.apply(null, ns) - Math.min.apply(null, ns)).toFixed(2);
   }
 
+  // ---------------- 预览表格（15 列复刻） ----------------
   function buildPreview(sec) {
     var sh = job.sheets[sec];
     var line = job.line;
@@ -172,19 +181,23 @@
   var fieldsEl = document.getElementById('fields');
   var secNameEl = document.getElementById('secName');
 
-  function refreshPreview() {
-    previewEl.innerHTML = buildPreview(job.sections[activeSec]);
-  }
+  function refreshPreview() { previewEl.innerHTML = buildPreview(job.sections[activeSec]); }
 
-  // ---------- 识别任务队列 ----------
-  var recTimers = {};
+  // ---------------- 状态 / 任务 ----------------
   function taskStatusText(ax) {
-    if (ax.recStatus === 'ok') return '识别成功';
+    if (ax.confirmed) return '已确认';
+    if (ax.recStatus === 'ok') return '识别成功（待确认）';
     if (ax.recStatus === 'fail') return '识别失败';
     if (ax.recStatus === 'pending') return '识别中…';
     if (ax.recStatus === 'queued') return '排队中…';
     if (ax.imagePath) return '已上传（未识别）';
     return '未上传';
+  }
+  function statusClass(ax) {
+    if (ax.recStatus === 'ok' && !ax.confirmed) return 'ok';
+    if (ax.recStatus === 'fail') return 'bad';
+    if (ax.recStatus === 'pending') return 'pending';
+    return '';
   }
   function setRecStatus(secId, aid, status, err) {
     var sh = job.sheets[secId];
@@ -203,7 +216,6 @@
         ax.recStatus = 'fail';
         ax.recError = '识别超时（模型长时间无返回）';
         XL.save(data);
-        hideBusy();
         render();
       }
       delete recTimers[aid];
@@ -218,20 +230,18 @@
     setRecStatus(secId, aid, 'pending', '');
     lastPick = { jobId: jobId, section: secId, axle: aid };
     render();
-    showBusy('正在识别 ' + aid + ' …\n（主模型失败会自动尝试备选模型）');
     try {
       HRBridge.xuanlunRecognize(JSON.stringify({ jobId: jobId, section: secId, axle: aid, imagePath: imagePath }));
       armTimeout(secId, aid);
     } catch (e) {
-      hideBusy();
       setRecStatus(secId, aid, 'fail', '识别调用失败：' + (e && e.message ? e.message : e));
       render();
     }
   }
   function renderTasks() {
-    var box = document.getElementById('tasks');
-    if (!box) return;
-    box.innerHTML = '';
+    var list = document.getElementById('taskList');
+    if (!list) return;
+    list.innerHTML = '';
     var any = false;
     job.sections.forEach(function (sec) {
       var sh = job.sheets[sec] || {};
@@ -239,22 +249,47 @@
       Object.keys(axles).forEach(function (aid) {
         var ax = axles[aid];
         if (!ax) return;
-        if (!ax.imagePath && !ax.recStatus) return;
+        if (!ax.imagePath && !ax.recStatus && !ax.data) return;
         any = true;
-        var row = document.createElement('div'); row.className = 'task';
+        var row = document.createElement('div'); row.className = 'trow';
+        var head = document.createElement('div'); head.className = 'trow-head';
         var id = document.createElement('div'); id.className = 'tid'; id.textContent = aid;
-        var st = document.createElement('div'); st.className = 'tmsg';
-        st.textContent = taskStatusText(ax) + (ax.recStatus === 'fail' && ax.recError ? '：' + ax.recError : '');
-        row.appendChild(id); row.appendChild(st);
+        var st = document.createElement('div'); st.className = 'tst ' + statusClass(ax);
+        st.textContent = taskStatusText(ax);
+        var act = document.createElement('div'); act.className = 'tact';
         if (ax.recStatus === 'fail' && ax.imagePath) {
           var b = document.createElement('button'); b.className = 'task-retry'; b.textContent = '重试';
           b.onclick = function () { startRecognize(sec, aid, ax.imagePath); };
-          row.appendChild(b);
+          act.appendChild(b);
         }
-        box.appendChild(row);
+        head.appendChild(id); head.appendChild(st); head.appendChild(act);
+        row.appendChild(head);
+        if (ax.recStatus === 'fail' && ax.recError) {
+          var err = document.createElement('div'); err.className = 'terr'; err.textContent = ax.recError;
+          row.appendChild(err);
+        }
+        list.appendChild(row);
       });
     });
-    if (!any) box.innerHTML = '<div class="hint" style="margin:0">暂无任务，上传照片后自动加入识别队列。</div>';
+    if (!any) list.innerHTML = '<div class="task-empty">暂无任务：上传图片后会自动加入队列。</div>';
+  }
+
+  // ---------------- 渲染 ----------------
+  function updateHash() {
+    try { history.replaceState(null, '', '#' + encodeURIComponent(jobId + '|' + activeSec)); } catch (e) { /* ignore */ }
+  }
+  function openEdit(secId, aid) {
+    location.href = 'xuanlun-edit.html#' + encodeURIComponent(jobId + '|' + secId + '|' + aid);
+  }
+  function getThumb(path) {
+    if (thumbCache[path]) return thumbCache[path];
+    try {
+      if (window.HRBridge && HRBridge.xuanlunImageData) {
+        var r = JSON.parse(HRBridge.xuanlunImageData(path));
+        if (r && r.ok && r.dataUrl) { thumbCache[path] = r.dataUrl; return r.dataUrl; }
+      }
+    } catch (e) { /* ignore */ }
+    return '';
   }
 
   function render() {
@@ -268,11 +303,7 @@
       var b = document.createElement('button');
       b.className = 'tab' + (i === activeSec ? ' active' : '');
       b.textContent = sec;
-      b.onclick = function () {
-        activeSec = i;
-        try { history.replaceState(null, '', '#' + encodeURIComponent(jobId + '|' + i)); } catch (e) { /* ignore */ }
-        render();
-      };
+      b.onclick = function () { activeSec = i; updateHash(); render(); };
       tabs.appendChild(b);
     });
 
@@ -280,7 +311,7 @@
     var sh = job.sheets[sec];
     secNameEl.textContent = sec;
 
-    // 页面设置（每节）
+    // 页面设置
     fieldsEl.innerHTML = '';
     function field(labelText, inputEl, span2) {
       var wrap = document.createElement('div'); wrap.className = 'field' + (span2 ? ' span2' : '');
@@ -303,7 +334,7 @@
     field('镟修人', inMaker);
     field('复核人', inChecker);
 
-    // 镟修数据（每轴：编辑 + 上传照片）
+    // 镟修数据：轴号 | 状态（中间） | 按钮（最右）
     axlesEl.innerHTML = '';
     for (var n = 1; n <= 4; n++) {
       (function (n) {
@@ -311,40 +342,55 @@
         var ax = sh.axles[aid] || (sh.axles[aid] = { dir: 'A-B', data: null });
         var row = document.createElement('div'); row.className = 'axle';
         var an = document.createElement('div'); an.className = 'an'; an.textContent = aid;
+
+        var st = document.createElement('div'); st.className = 'st ' + statusClass(ax);
+        st.textContent = taskStatusText(ax);
+
         var actions = document.createElement('div'); actions.className = 'axle-actions';
-        var bEdit = document.createElement('button'); bEdit.className = 'ghost small'; bEdit.textContent = '编辑';
-        bEdit.onclick = function () {
-          location.href = 'xuanlun-edit.html#' + encodeURIComponent(jobId + '|' + sec + '|' + aid);
-        };
-        var bPhoto = document.createElement('button');
-        bPhoto.className = 'upload-btn';
-        bPhoto.textContent = (ax.data || ax.imagePath) ? '重新上传' : '上传照片';
-        bPhoto.onclick = function () { beginPick(aid); };
-        actions.appendChild(bEdit); actions.appendChild(bPhoto);
-    var st = document.createElement('div'); st.className = 'st';
-    var stText = '未上传';
-    if (ax.data && ax.recStatus === 'ok') stText = '识别成功';
-    else if (ax.recStatus === 'fail') stText = '识别失败';
-    else if (ax.recStatus === 'pending') stText = '识别中…';
-    else if (ax.recStatus === 'queued') stText = '排队中…';
-    else if (ax.imagePath) stText = '已上传';
-    st.textContent = stText;
-    row.appendChild(an); row.appendChild(actions); row.appendChild(st);
-    axlesEl.appendChild(row);
-  })(n);
+        if (ax.imagePath) {
+          var thumb = document.createElement('button');
+          thumb.className = 'thumb-btn';
+          thumb.title = '点击重新提交图片';
+          var url = getThumb(ax.imagePath);
+          if (url) {
+            var im = document.createElement('img'); im.src = url; im.alt = aid;
+            thumb.appendChild(im);
+          } else {
+            thumb.textContent = '图片';
+          }
+          thumb.onclick = function () { beginPick(aid); };
+          actions.appendChild(thumb);
+        } else {
+          var bUp = document.createElement('button');
+          bUp.className = 'upload-btn';
+          bUp.textContent = '提交图片';
+          bUp.onclick = function () { beginPick(aid); };
+          actions.appendChild(bUp);
+        }
+
+        var needConfirm = (ax.recStatus === 'ok' && !ax.confirmed);
+        var bEdit = document.createElement('button');
+        bEdit.className = needConfirm ? 'primary small confirm-btn' : 'ghost small';
+        bEdit.textContent = needConfirm ? '确认识别结果' : '编辑';
+        bEdit.onclick = function () { openEdit(sec, aid); };
+        actions.appendChild(bEdit);
+
+        row.appendChild(an); row.appendChild(st); row.appendChild(actions);
+        axlesEl.appendChild(row);
+      })(n);
     }
 
     refreshPreview();
     renderTasks();
   }
 
-  // 拍照/相册：直接调起系统选择器（相机 + 相册），不再弹自定义菜单
+  // ---------------- 图片提交 & 识别 ----------------
   function beginPick(aid) {
     var secId = job.sections[activeSec];
     var shNow = job.sheets[secId];
     var axNow = shNow && shNow.axles[aid];
     if (axNow && axNow.data) {
-      if (!confirm('该轴已填写过数据，重新上传将覆盖原数据，是否继续？')) return;
+      if (!confirm('该轴已填写过数据，重新提交图片将覆盖原数据，是否继续？')) return;
     }
     if (window.HRBridge && HRBridge.xuanlunPickImage) {
       HRBridge.xuanlunPickImage(JSON.stringify({ jobId: jobId, section: secId, axle: aid }));
@@ -353,8 +399,6 @@
     }
   }
 
-  // 原生拍照/相册返回后：保存图片路径 → 自动识别 → 进编辑页核对
-  var lastPick = null;
   function showBusy(text) {
     document.getElementById('busyText').textContent = text || '处理中…';
     document.getElementById('busy').classList.remove('hidden');
@@ -375,6 +419,7 @@
       var ax2 = sh2.axles[req.axle] || (sh2.axles[req.axle] = { dir: 'A-B', data: null });
       ax2.imagePath = obj.path;
       ax2.origPath = obj.origPath || '';
+      ax2.confirmed = false;
       ax2.recStatus = 'pending';
       ax2.recError = '';
       XL.save(d2);
@@ -387,11 +432,6 @@
     }
   };
 
-  function openEdit(p) {
-    if (!p) return;
-    location.href = 'xuanlun-edit.html#' + encodeURIComponent(p.jobId + '|' + p.section + '|' + p.axle);
-  }
-
   function s(v) { return (v === null || v === undefined) ? '' : String(v); }
   function normWheel(w) {
     w = w || {};
@@ -399,7 +439,6 @@
   }
 
   window.__xuanlunRecognized = function (obj) {
-    hideBusy();
     if (lastPick && recTimers[lastPick.axle]) { clearTimeout(recTimers[lastPick.axle]); delete recTimers[lastPick.axle]; }
     if (!obj || !obj.ok) {
       var errMsg = (obj && obj.error) || '未知错误';
@@ -422,23 +461,21 @@
           }
         }
       } catch (e0) { /* ignore */ }
-      alert('识别失败：' + errMsg + '\n已加入任务列表，可点「重试」，也可手动填写。');
-      openEdit(lastPick);
       return;
     }
     try {
       var p = lastPick || { jobId: obj.jobId, section: obj.section, axle: obj.axle };
       var d2 = XL.load();
       var j2 = XL.getJob(d2, p.jobId);
-      if (!j2) { alert('作业不存在'); return; }
+      if (!j2) return;
       XL.ensureJob(j2);
       var sh2 = j2.sheets[p.section];
-      if (!sh2) { alert('未找到该节'); return; }
+      if (!sh2) return;
       var ax2 = sh2.axles[p.axle] || (sh2.axles[p.axle] = { dir: 'A-B', data: null });
       var r = obj.data || {};
       var before = r['加工前'] || {}, after = r['加工后'] || {};
       var recCar = s(r['车辆ID']).trim();
-      if (!/^\d{6}$/.test(recCar)) recCar = '';   // 车辆ID 必须是 6 位数字，否则丢弃
+      if (!/^\d{6}$/.test(recCar)) recCar = '';
       ax2.data = {
         axleId: s(r['轮对ID']), carId: recCar, date: s(r['加工日期']),
         before: { left: normWheel(before['左轮']), right: normWheel(before['右轮']) },
@@ -448,34 +485,28 @@
       ax2.recStatus = 'ok';
       ax2.recModel = obj.model || '';
       ax2.recError = '';
+      ax2.confirmed = false;
       XL.save(d2);
       data = d2; job = j2;
       render();
-
-      var msgs = [];
-      if (ax2.data.axleId && ax2.data.axleId !== p.axle) msgs.push('识别轮对ID（' + ax2.data.axleId + '）与当前轴位（' + p.axle + '）不一致');
-      if (ax2.data.carId && ax2.data.carId !== j2.car) msgs.push('识别车辆ID（' + ax2.data.carId + '）与当前作业车号（' + j2.car + '）不一致');
-      if (msgs.length) alert('请注意核对照片是否放错位置：\n' + msgs.join('\n'));
-
-      openEdit(p);
     } catch (e) {
-      alert('处理识别结果失败：' + (e && e.message ? e.message : e));
-      openEdit(lastPick);
+      /* ignore */
     }
   };
 
-  document.getElementById('btnBack').onclick = function () {
-    if (history.length > 1) history.back();
-    else location.href = 'xuanlun.html';
+  // ---------------- 任务浮窗 ----------------
+  document.getElementById('btnTasks').onclick = function () {
+    renderTasks();
+    document.getElementById('taskPop').classList.remove('hidden');
   };
-  document.getElementById('btnDelJob').onclick = function () {
-    if (!confirm('删除作业「' + job.line + '号线 ' + job.car + '车」及其本机数据吗？')) return;
-    data.jobs = data.jobs.filter(function (j) { return j.id !== jobId; });
-    XL.save(data);
-    location.replace('xuanlun.html');
+  document.getElementById('taskClose').onclick = function () {
+    document.getElementById('taskPop').classList.add('hidden');
+  };
+  document.getElementById('taskPop').onclick = function (e) {
+    if (e.target === this) this.classList.add('hidden');
   };
 
-  // ---------------- 导出 Excel（保留原模板公式与格式） ----------------
+  // ---------------- 导出 Excel ----------------
   function fmtZh(iso) {
     var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!m) return iso || '';
@@ -568,9 +599,25 @@
     });
   };
 
+  document.getElementById('btnBack').onclick = function () {
+    if (history.length > 1) history.back();
+    else location.href = 'xuanlun.html';
+  };
+  document.getElementById('btnDelJob').onclick = function () {
+    if (!confirm('删除作业「' + job.line + '号线 ' + job.car + '车」及其本机数据吗？')) return;
+    data.jobs = data.jobs.filter(function (j) { return j.id !== jobId; });
+    XL.save(data);
+    location.replace('xuanlun.html');
+  };
+
   render();
 
-  // 从编辑页返回时重新加载数据并刷新
+  // 预览用：?tasks=1 时自动打开任务浮窗
+  if (/[?&]tasks=1/.test(location.search)) {
+    renderTasks();
+    document.getElementById('taskPop').classList.remove('hidden');
+  }
+
   window.addEventListener('pageshow', function () {
     data = XL.load();
     var j2 = XL.getJob(data, jobId);

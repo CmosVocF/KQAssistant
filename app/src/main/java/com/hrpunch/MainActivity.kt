@@ -205,15 +205,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         val url = webView.url ?: ""
-        // 引导页 -> 直接退出应用
-        if (url.startsWith("file://")) {
+        // 引导页 -> 退出应用；本地其他页面 -> 正常逐层返回
+        if (url.startsWith("file:///android_asset/launcher.html")) {
             super.onBackPressed()
             return
         }
         if (webView.canGoBack()) {
             webView.goBack()
         } else {
-            // 系统首页没有历史记录时，返回本地引导页
             webView.loadUrl(LAUNCHER_URL)
         }
     }

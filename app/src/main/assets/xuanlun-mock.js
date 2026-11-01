@@ -116,8 +116,8 @@
     xuanlunShareFile: function () { return JSON.stringify({ ok: true }); }
   };
 
-  // ?demo=1 时注入一份示例作业，方便预览/截图
-  if (qs('demo') === '1' && !localStorage.getItem(K1)) {
+  // ?demo=1 时注入一份示例作业，方便预览/截图（每次覆盖）
+  if (qs('demo') === '1') {
     var job = {
       id: 'jdemo', line: '04', car: '047048', created: Date.now(),
       sections: ['04A047', '04B047', '04C047', '04C048', '04B048', '04A048'], sheets: {}
@@ -132,6 +132,19 @@
     var ax = sheet.axles['04B047-3'];
     ax.recStatus = 'ok';
     ax.recModel = 'mock-vl';
+    ax.imagePath = 'mock://demo/04B047-3';
+    imgs[ax.imagePath] = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">' +
+      '<rect width="160" height="160" fill="#eef1f5"/>' +
+      '<rect x="18" y="26" width="124" height="108" fill="#fff" stroke="#9aa4b2"/>' +
+      '<text x="80" y="86" font-size="13" text-anchor="middle" fill="#5b6470">示例图片</text></svg>'
+    );
+    // 演示失败任务（红色报错展示）
+    var axFail = sheet.axles['04B047-4'];
+    axFail.imagePath = 'mock://demo/04B047-4';
+    imgs[axFail.imagePath] = imgs[ax.imagePath];
+    axFail.recStatus = 'fail';
+    axFail.recError = 'HTTP 401：API Key 无效（示例错误）';
     ax.data = {
       axleId: '04B047-3', carId: '047048', date: '2026-10-13',
       before: { left: { lh: '30.11', le: '28.94', dia: '813.38', rt: '0.03' }, right: { lh: '30.24', le: '28.64', dia: '813.77', rt: '0.03' } },
