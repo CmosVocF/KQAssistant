@@ -72,6 +72,19 @@
       <div id="library"></div>
       <div class="hint">在服务商模型列表点「＋ 添加」加入这里。每个模型可设置自己的上下文长度与思考等级，并可单独「测试」是否可用。</div>
     </div>
+
+    <div class="card">
+      <h3>识别图片</h3>
+      <div class="form-row">
+        <label>发给模型的长边像素（越大越清晰，速度/流量也越大）</label>
+        <select id="imgMax" style="border:1px solid #d0d7de;border-radius:8px;padding:9px 10px;font-size:14px;background:#fff">
+          <option value="2000">2000 px</option>
+          <option value="2600">2600 px（推荐）</option>
+          <option value="3200">3200 px（更清晰，较慢）</option>
+        </select>
+      </div>
+      <div class="hint">部分模型服务端会再压缩图片；若调大后仍不准，建议换更强的视觉模型，或改用"数值区域二次裁切"识别。</div>
+    </div>
   </main>
 
 <script src="xuanlun-common.js"></script>
@@ -285,6 +298,14 @@
   };
 
   document.getElementById('btnBack').onclick = function () { XL.goBack('home'); };
+
+  // 识别图片长边像素
+  var imgMaxSel = document.getElementById('imgMax');
+  imgMaxSel.value = String(cfg.imgMax || 2600);
+  imgMaxSel.onchange = function () {
+    cfg.imgMax = parseInt(imgMaxSel.value, 10) || 2600;
+    save();
+  };
 
   render();
 })();

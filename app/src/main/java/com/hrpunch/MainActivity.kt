@@ -491,8 +491,8 @@ JSON 格式：
         contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) }
         val maxDim = kotlin.math.max(opts.outWidth, opts.outHeight)
         var sample = 1
-        // 解码结果不超过 3000px（控制内存），随后统一缩放到 maxSize，避免 inSampleSize 把图压到 1000px 导致模糊
-        while (maxDim / sample > 3000) sample *= 2
+        // 解码结果不超过 4000px（控制内存），随后统一缩放到 maxSize
+        while (maxDim / sample > 4000) sample *= 2
         val o2 = android.graphics.BitmapFactory.Options()
         o2.inSampleSize = sample
         val bmp = contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o2) }
@@ -514,7 +514,11 @@ JSON 格式：
             val jobId = req.optString("jobId")
             val section = req.optString("section")
             val axle = req.optString("axle")
-            val bmp = decodeSampled(uri, 2000)
+            val imgMax = try {
+                val c = org.json.JSONObject(prefs.getString("xuanlun_models", "{}"))
+                c.optInt("imgMax", 2600).coerceIn(1600, 3200)
+            } catch (e: Exception) { 2600 }
+            val bmp = decodeSampled(uri, imgMax)
             val dir = java.io.File(filesDir, "xuanlun/$jobId/$section")
             dir.mkdirs()
             val orig = java.io.File(dir, "${axle}_orig.jpg")
