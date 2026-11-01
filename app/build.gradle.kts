@@ -11,8 +11,8 @@ android {
         applicationId = "com.hrpunch"
         minSdk = 24
         targetSdk = 34
-        versionCode = 39
-        versionName = "1.4.0-test029"
+        versionCode = 40
+        versionName = "1.4.1-beta"
     }
 
     signingConfigs {
